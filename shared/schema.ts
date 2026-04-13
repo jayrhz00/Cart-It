@@ -1,19 +1,19 @@
 //Jessie Hernandez 700775688
 // CART-IT DATA MODELS
 // This file will be our "blueprint".
-// Tells our site what a User, Group, and CartItem look like. 
+// Tells our site what each table/ entity should look like 
 // Includes: Collaboration, price history, notes and notifications
 
 // ---- USER ----
 // Registered user of Cart-It
 // Each user can have multiple groups & items 
 
-export interface User       // Defines the object as "User" that other files will be able to use 
+export interface User            // Defines the object as "User" that other files will be able to use 
 {
-    id: number;             // Every user gets a unique # as their ID (auto-generated)
-    username: string;       // Displays user's username 
-    email: string;          // Email address for login 
-    password: string;       // Security technique to create hashed password
+    userId: number;             // Every user gets a unique # as their ID (auto-generated)
+    username: string;          // Displays user's username 
+    email: string;            // Email address for login 
+    passwordHash: string;    // Security technique to create hashed password
     createdAt: Date;        // Timestamp of when the account was created  
 }
 
@@ -24,11 +24,12 @@ export interface User       // Defines the object as "User" that other files wil
 
 export interface Group
 {
-    id: number;            // Unique ID
-    userId: number;        // Which user owns this group (links to User.id) 
-    name: string;          // Category name 
-    color: string;         // Color of sidebar label
-    createdAt: Date;       // Timestamp when group was created  
+    groupId: number;             // Unique ID
+    ownerId: number;            // Which user owns this group (links to User.userId) 
+    groupName: string;         // Category name 
+    color: string;            // Color of sidebar label
+    visibility: string;      // "Private" or "Shared"
+    createdAt: Date;        // Timestamp when group was created  
 }
 
 // ---- GROUP MEMBER ----
@@ -37,36 +38,44 @@ export interface Group
 
 export interface GroupMember
 {
-    id: number;          
-    groupId: number;            // Which group is being shared 
-    userId: number;             // Which user has access to group
-    role: string;               // "Owner" or "Editor" 
-    joinedAt: Date;             // Timestamp of when member was added
+    groupId: number;       // PK/FK Group.groupId     
+    userId: number;       // PK/FK User.userId  
+    role: string;        // "Owner" or "Editor" 
+    joinedAt: Date;     // Timestamp of when member was added
 
 }
 
-// ---- CART ITEM ----
-// A product the user saved from a site 
-// Belongs to one group and one user 
-// Includes notes, purchase tracking, and price monitoring 
+// ---- CART ----
+// Stores a user's private uncategorized items 
+// One cart belongs to one user 
 
-export interface CartItem
+export interface Cart
 {
-    id: number;
-    userId: number;                 // Who saved this item 
-    groupId: number;                // Which WishList it's in
-    name: string;                   // Product's name 
-    price: number;                  // Current price in dollars
-    url: string;                    // Link to product page
-    imageUrl: string;               // Link to product image
-    store: string;                  // Which store/site product is in
-    notes: string;                  // Private internal notes user can make about the item 
-    purchased: boolean;             // Has the user bought this item before? T/F
-    purchasedAt: Date | null;       // When item was purchased (null if it hasn't been purchased yet)
-    purchasedPrice: number | null;  // Price at time of purchase (null if it hasn't been purchased yet)
-    trackPrice: boolean;            // Does the user want to monitor this item for price changes? 
-    createdAt: Date;                // Timestamp of when item was saved 
+    cartId: number;                 // Primary key: unique ID for each cart
+    userId: number;                 // Which user owns this cart 
+    createdAt: Date;                // Timestamp of when the cart was created 
 }
+
+// ---- ITEM ----
+// A saved product 
+// Item belongs to either a CART or a GROUP, but not both 
+
+export interface Item
+{
+    itemId: number;                   // Unique ID for each saved item
+    cartId: number | null;           // Null if item is stored in group 
+    groupId: number | null;         // Null if item is stored in cart
+    addedByUserId: number;         // FK -> User.userId records who saved the item
+
+    productName: string;            // Product's name 
+    productUrl: string;             // Link to product page
+    imageUrl: string;               // Link to product image url
+    storeName: string;              // Which store/site product is in
+    currentPrice: number;           // Current known price of item
+    notes: string;                  // Private internal notes user can make about the item 
+    isPurchased: boolean;           // Has the user bought this item before? T/F 
+}
+
 
 // ---- PRICE HISTORY ----
 // Records price changes over time for tracked items 
@@ -75,9 +84,9 @@ export interface CartItem
 
 export interface PriceHistory 
 {
-    id: number;
+    historyId: number;              // Unique ID for each price record
     itemId: number;                 // Which cart item this price is for 
-    price: number;                  // Current price 
+    price: number;                  // Current price at the time of check
     checkedAt: Date;                // When the price was checked 
 }
 
@@ -87,12 +96,11 @@ export interface PriceHistory
 
 export interface Notification 
 {
-    id: number;
+    notificationId: number;         // Unique ID for each notification
     userId: number;                 // Who gets notified
     itemId: number;                 // Which item dropped in price
-    type: string;                   // Type of notification the user will receive ("price drop")
     message: string;                // Notification message 
-    emailSent: boolean;             // Was the email successfully sent?
+    isRead: boolean;                // Has the notification been read?
     createdAt: Date;                // Timestamp of when notification was created 
 }
 
@@ -100,9 +108,10 @@ export interface Notification
 // When creating new records, id and timestamps are auto generated
 // These types represent what the user fills in
 
-export type InsertUser = Omit<User, "id" | "createdAt">;
-export type InsertGroup = Omit<Group, "id" | "createdAt">;
-export type InsertGroupMember = Omit<GroupMember, "id" | "joinedAt">;
-export type InsertCartItem = Omit<CartItem, "id" | "createdAt">;
-export type InsertPriceHistory = Omit<PriceHistory, "id">;
-export type InsertNotification = Omit<Notification, "id" | "createdAt">;
+export type InsertUser = Omit<User, "userId" | "createdAt">;
+export type InsertGroup = Omit<Group, "groupId" | "createdAt">;
+export type InsertGroupMember = Omit<GroupMember, "joinedAt">;
+export type InsertCart = Omit<Cart, "cartId" | "createdAt">;
+export type InsertItem= Omit<Item, "itemId">;
+export type InsertPriceHistory = Omit<PriceHistory, "historyId">;
+export type InsertNotification = Omit<Notification, "notificationId" | "createdAt">;
