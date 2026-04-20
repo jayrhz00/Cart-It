@@ -142,18 +142,20 @@ CREATE TABLE IF NOT EXISTS price_history
 
 CREATE TABLE IF NOT EXISTS notifications
 (
-    notification_id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL,
-    item_id INTEGER NOT NULL,
-    message TEXT NOT NULL,
-    is_read BOOLEAN DEFAULT FALSE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    notification_id SERIAL PRIMARY KEY,                         -- Unique ID for each notification (auto)
+    user_id INTEGER NOT NULL,                                   -- User who will receive this notification
+    item_id INTEGER NOT NULL,                                   -- Item related to this notification
+    message TEXT NOT NULL,                                      -- Message shown to user (ex: "Price dropped to $5.99")
+    is_read BOOLEAN DEFAULT FALSE NOT NULL,                     -- Tracks if user has seen notification, FALSE= unread, TRUE= viewed
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,    -- Automatically stores when notification was created 
 
+-- FK links notification to user
     CONSTRAINT fk_notifications_user
         FOREIGN KEY (user_id)
         REFERENCES users(user_id)
         ON DELETE CASCADE,
 
+-- FK links notification to item
     CONSTRAINT fk_notifications_item
         FOREIGN KEY (item_id)
         REFERENCES cart_items(item_id)
