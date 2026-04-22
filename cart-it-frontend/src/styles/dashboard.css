@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  /* Main Layout */
+  .dashboard-container { @apply flex min-h-screen bg-[#4A103D] text-white; }
+
+  /* Sidebar */
+  .dash-sidebar { @apply w-64 bg-white text-black p-8 flex flex-col justify-between; }
+  .sidebar-logo { @apply h-24 w-auto object-contain mb-8; }
+  .sidebar-nav-item { @apply flex items-center gap-2 cursor-pointer hover:text-orange-500 transition-colors; }
+  
+  /* Extension Card Style */
+  .extension-card { @apply bg-orange-50 p-4 rounded-2xl border border-orange-100 mt-8 mb-4 text-center; }
+  .extension-title { @apply font-bold text-sm mb-2 text-gray-800; }
+  .extension-btn { 
+    @apply w-full flex flex-row items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold 
+    bg-[#DB8046] text-white transition-all duration-200 
+    hover:bg-[#4A103D] hover:text-white whitespace-nowrap; 
+  }
+  .logout-btn { @apply flex items-center gap-2 text-red-500 font-semibold mt-auto; }
+
+  /* Main Area */
+  .dash-main { @apply flex-1 p-12; }
+  .dash-title { @apply text-4xl font-semibold italic text-center mb-12; }
+
+  /* Wishlist Section */
+  .wishlist-section { @apply space-y-6 mb-12; }
+  .wishlist-title { @apply text-2xl font-bold italic; }
+  .wishlist-grid { @apply grid grid-cols-5 gap-6; }
+  
+  .create-wishlist-btn { @apply h-48 bg-[#DB8046] p-6 rounded-[40px] flex flex-col items-center justify-center space-y-3 transition-transform hover:scale-105; }
+  .create-wishlist-label { @apply text-xs italic font-semibold; }
+  
+  .wishlist-card { @apply bg-white rounded-t-3xl rounded-b-lg p-2 flex flex-col items-center; }
+  .wishlist-img-placeholder { @apply w-28 h-28 bg-[#DB8046] rounded-t-2xl rounded-b-md flex items-center justify-center; }
+  .wishlist-card-footer { @apply w-full flex justify-between items-center px-1 py-1 mt-1; }
+  .wishlist-card-name { @apply font-bold text-black; }
+  .wishlist-item-count { @apply font-normal italic text-[#7C8188]; }
+
+  .empty-state { 
+    @apply h-48 col-span-4 flex items-center justify-center text-white/50 italic text-lg py-10 border-2 border-dashed border-white/20 rounded-[40px]; 
+  }
+
+  /* Modal Styles */
+  .modal-overlay { @apply fixed inset-0 bg-black/50 flex items-center justify-center z-[1000]; }
+  .modal-content { @apply bg-white p-8 rounded-xl w-[350px] shadow-2xl flex flex-col gap-4 text-black; }
+  .modal-content input { 
+    @apply p-3 border border-gray-300 rounded-md outline-none transition-colors text-black 
+    focus:border-[#DB8046] focus:ring-2 focus:ring-[#DB8046]/20; 
+  }
+  .modal-actions { @apply flex justify-end gap-2; }
+  .save-btn { @apply bg-[#f97316] text-white py-2 px-4 rounded-md cursor-pointer; }
+  .cancel-btn { @apply bg-gray-200 py-2 px-4 rounded-md cursor-pointer; }
+
+  /* Analytics & Cart Section */
+  .info-grid { @apply grid grid-cols-2 gap-8; }
+  .dashboard-card { @apply bg-[#DB8046] p-8 rounded-[40px] shadow-lg; }
+  .card-header { @apply text-xl font-bold mb-6 italic; }
+  
+  .box-placeholder { @apply h-20 bg-white/20 rounded-xl; }
+  .cart-grid { @apply grid grid-cols-4 gap-4; }
+  .cart-placeholder { @apply h-16 bg-white/20 rounded-lg; }
+}

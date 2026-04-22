@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+@layer components {
+  /* Layout */
+  .landing-container { @apply min-h-screen bg-white font-sans text-gray-900; }
+  
+  /* Header */
+  .landing-header { @apply p-4 border-b border-gray-100; }
+  .logo-img { @apply h-14 w-auto object-contain; } 
+
+  /* Hero Section */
+  .hero-section { 
+    @apply relative bg-black text-white py-32 text-center bg-cover bg-center; 
+    background-image: url('../assets/hero1.png');
+  }
+  .hero-overlay { @apply absolute inset-0 bg-black opacity-40; }
+  .hero-content { @apply relative z-10 max-w-4xl mx-auto px-4; }
+  .hero-title { @apply text-5xl md:text-6xl font-bold mb-4; }
+  .hero-subtitle { @apply text-xl mb-8 opacity-90; }
+  .hero-buttons { @apply flex justify-center space-x-4; }
+  
+  .btn-register { @apply bg-orange-500 text-white px-8 py-2 rounded shadow hover:bg-orange-600 transition; }
+  .btn-login { @apply bg-gray-700 text-white px-8 py-2 rounded shadow hover:bg-gray-800 transition; }
+
+  /* How it Works */
+  .section-padding { @apply py-20 px-8 bg-slate-50; }
+  .steps-wrapper { @apply max-w-6xl mx-auto; }
+  .section-title { @apply text-2xl font-bold mb-2 text-center; }
+  .section-subtitle { @apply text-gray-600 mb-16 text-center; }
+  .steps-grid { @apply grid md:grid-cols-3 gap-12 lg:gap-20 text-left; }
+  .step-card { @apply space-y-4 p-6 bg-white rounded-2xl shadow-sm border border-slate-100; }
+  .step-number { @apply text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r; }
+  .step-title { @apply font-bold text-xl; }
+  .step-desc { @apply text-gray-500; }
+
+  /* Features */
+  .features-section { @apply py-20 px-8; }
+  .features-main-title { @apply text-3xl font-bold mb-2; }
+  .features-main-subtitle { @apply text-gray-500 mb-12; }
+  .features-grid { @apply grid md:grid-cols-3 gap-6 max-w-7xl mx-auto; }
+  .feature-card { @apply bg-white p-8 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition; }
+  .feature-icon { @apply text-2xl mb-4; }
+  .feature-title { @apply font-bold mb-2; }
+  .feature-desc { @apply text-gray-500 text-sm leading-relaxed; }
+  
+  .download-btn { @apply bg-gradient-to-r from-orange-500 to-blue-600 text-white px-12 py-4 rounded-lg font-bold text-lg shadow-xl hover:scale-105 transition-transform; }
+}
