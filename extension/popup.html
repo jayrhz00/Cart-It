@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { font-family: system-ui, sans-serif; width: 300px; padding: 12px; margin: 0; }
+      label { display: block; font-size: 12px; margin-top: 8px; color: #444; }
+      input, textarea { width: 100%; box-sizing: border-box; padding: 6px 8px; margin-top: 4px; font-size: 12px; }
+      textarea { min-height: 52px; resize: vertical; }
+      button { margin-top: 12px; width: 100%; padding: 10px; background: #db8046; color: #fff; border: 0; border-radius: 8px; font-weight: 700; cursor: pointer; }
+      button:disabled { opacity: 0.6; cursor: not-allowed; }
+      #status { margin-top: 10px; font-size: 12px; word-break: break-word; }
+      .ok { color: #166534; }
+      .err { color: #991b1b; }
+      .hint { font-size: 11px; color: #666; margin-top: 4px; }
+    </style>
+  </head>
+  <body>
+    <h3 style="margin: 0 0 8px;">Cart-It</h3>
+    <label>API base URL</label>
+    <input id="apiBase" type="text" placeholder="http://127.0.0.1:5001" />
+    <label>JWT (copy from Cart-It site)</label>
+    <p class="hint">After logging in at localhost:3000, DevTools → Application → Local Storage → <code>token</code></p>
+    <textarea id="jwt" placeholder="Paste token here..." autocomplete="off"></textarea>
+    <label>Group ID (optional)</label>
+    <input id="groupId" type="number" placeholder="leave empty" />
+    <button id="saveBtn">Save this page</button>
+    <div id="status"></div>
+    <script src="popup.js"></script>
+  </body>
+</html>

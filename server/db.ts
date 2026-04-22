@@ -1,3 +1,8 @@
+/**
+ * PostgreSQL connection for the API.
+ * DATABASE_URL in server/.env points at your database (local or Neon).
+ * A "pool" reuses connections so we do not open a new TCP connection on every query.
+ */
 import dotenv from "dotenv";
 import { Pool } from "pg";
 

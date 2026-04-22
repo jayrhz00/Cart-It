@@ -3,11 +3,24 @@ import cors from "cors";
 import dotenv from "dotenv";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import fs from "fs/promises";
+import path from "path";
 
 import { pool } from "./db";
 import { storage } from "./storage";
 
-// Load environment variables from .env
+/**
+ * Cart-It — Express API + PostgreSQL
+ * ---------------------------------------------------------------------------
+ * STUDENT CHEAT SHEET (how to explain this file in class):
+ * - Express: a web server that listens for HTTP requests (GET, POST, etc.).
+ * - Each `app.get` / `app.post` is an "endpoint" or "route" your React app calls.
+ * - `authenticateToken`: middleware — runs BEFORE the route handler; checks JWT.
+ * - JWT: JSON Web Token — proves "this request is from user X" without sending password again.
+ * - `pool` (from db.ts): connection pool to PostgreSQL — runs SQL queries.
+ * - `storage`: helper class for user/group rows (some routes use pool directly).
+ * - On startup we run `schema.sql` once so all 6 tables exist (see initializeDatabase).
+ */
 dotenv.config();
 
 // Make sure JWT secret exists before server starts
@@ -41,6 +54,34 @@ interface CreateGroupBody
   group_name: string;
   color?: string;
   visibility?: string;
+}
+
+interface UpdateGroupBody {
+  group_name?: string;
+  color?: string | null;
+  visibility?: "Private" | "Shared";
+}
+
+interface CreateCartItemBody {
+  group_id?: number | null;
+  item_name: string;
+  product_url: string;
+  image_url?: string | null;
+  store?: string | null;
+  current_price: number;
+  notes?: string | null;
+}
+
+interface UpdateCartItemBody {
+  group_id?: number | null;
+  item_name?: string;
+  product_url?: string;
+  image_url?: string | null;
+  store?: string | null;
+  current_price?: number;
+  notes?: string | null;
+  is_purchased?: boolean;
+  purchase_price?: number | null;
 }
 
 // Custom request type for routes that use JWT
@@ -118,6 +159,20 @@ pool
   .then((result) => console.log("Database TIME:", result.rows))
   .catch((err) => console.error("Database ERROR:", err));
 
+// Runs once when the server starts: creates tables if missing (CREATE TABLE IF NOT EXISTS).
+// Your professor can see the same definitions in server/schema.sql.
+async function initializeDatabase(): Promise<void> {
+  try {
+    const schemaPath = path.join(__dirname, "schema.sql");
+    const schemaSql = await fs.readFile(schemaPath, "utf-8");
+    await pool.query(schemaSql);
+    console.log("Database schema initialized successfully");
+  } catch (error) {
+    console.error("Database schema initialization failed:", error);
+    throw error;
+  }
+}
+
 // BASIC TEST ROUTES
 
 // Root route to prove server exists
@@ -134,6 +189,37 @@ app.get("/test-db", async (_req: Request, res: Response) => {
   } catch (error) {
     console.error("Database test route failed:", error);
     res.status(500).json({ message: "Database test failed" });
+  }
+});
+
+// Preview available database tables + columns
+app.get("/api/db/preview", async (_req: Request, res: Response) => {
+  try {
+    const tableResult = await pool.query(
+      `
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+      ORDER BY table_name ASC
+      `
+    );
+
+    const columnResult = await pool.query(
+      `
+      SELECT table_name, column_name, data_type
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+      ORDER BY table_name ASC, ordinal_position ASC
+      `
+    );
+
+    res.status(200).json({
+      tables: tableResult.rows.map((row) => row.table_name),
+      columns: columnResult.rows,
+    });
+  } catch (error) {
+    console.error("Database preview route failed:", error);
+    res.status(500).json({ message: "Failed to preview database schema" });
   }
 });
 
@@ -260,6 +346,29 @@ app.post(
   }
 );
 
+// Returns currently authenticated user profile details
+app.get("/api/me", authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const currentUser = await storage.getUser(req.user!.userId);
+
+    if (!currentUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.status(200).json({
+      user: {
+        userId: currentUser.user_id,
+        username: currentUser.username,
+        email: currentUser.email,
+        createdAt: currentUser.created_at,
+      },
+    });
+  } catch (error) {
+    console.error("Fetch current user failed:", error);
+    return res.status(500).json({ message: "Failed to fetch current user" });
+  }
+});
+
 // GROUP ROUTES
 
 // GET all groups that belong to a user that is logged in
@@ -318,6 +427,77 @@ app.post(
   }
 );
 
+// UPDATE group/category by id (name, color, visibility)
+app.patch(
+  "/api/groups/:id",
+  authenticateToken,
+  async (req: AuthRequest<UpdateGroupBody>, res: Response) => {
+    try {
+      const group_id = Number(req.params.id);
+      const owner_id = req.user!.userId;
+      const { group_name, color, visibility } = req.body;
+
+      if (isNaN(group_id)) {
+        return res.status(400).json({ message: "Invalid group ID" });
+      }
+
+      const fieldsToUpdate: string[] = [];
+      const values: Array<string | number | null> = [];
+      let valueIndex = 1;
+
+      if (group_name !== undefined) {
+        fieldsToUpdate.push(`group_name = $${valueIndex++}`);
+        values.push(group_name);
+      }
+
+      if (color !== undefined) {
+        fieldsToUpdate.push(`color = $${valueIndex++}`);
+        values.push(color);
+      }
+
+      if (visibility !== undefined) {
+        fieldsToUpdate.push(`visibility = $${valueIndex++}`);
+        values.push(visibility);
+      }
+
+      if (fieldsToUpdate.length === 0) {
+        return res.status(400).json({
+          message: "No valid fields were provided for update",
+        });
+      }
+
+      values.push(group_id);
+      values.push(owner_id);
+
+      const result = await pool.query(
+        `
+        UPDATE groups
+        SET ${fieldsToUpdate.join(", ")}
+        WHERE group_id = $${valueIndex++} AND owner_id = $${valueIndex}
+        RETURNING *
+        `,
+        values
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: "Group not found for this user",
+        });
+      }
+
+      return res.status(200).json({
+        message: "Group updated successfully",
+        group: result.rows[0],
+      });
+    } catch (error) {
+      console.error("Update group failed:", error);
+      return res.status(500).json({
+        message: "Failed to update group",
+      });
+    }
+  }
+);
+
 // DELETE a group by id
 app.delete(
   "/api/groups/:id",
@@ -369,10 +549,17 @@ app.get("/api/users", async (_req: Request, res: Response) => {
   }
 });
 
-app.get("/api/cart-items", async (_req: Request, res: Response) => {
+app.get("/api/cart-items", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
+    const owner_id = req.user!.userId;
     const result = await pool.query(
-      "SELECT * FROM cart_items ORDER BY item_id ASC"
+      `
+      SELECT *
+      FROM cart_items
+      WHERE user_id = $1
+      ORDER BY item_id ASC
+      `,
+      [owner_id]
     );
     res.status(200).json(result.rows);
   } catch (error) {
@@ -394,7 +581,7 @@ app.get("/api/dashboard", async (_req: Request, res: Response) => {
         ci.is_purchased,
         ci.notes,
         u.username,
-        COALESCE(g.name, 'No Group') AS group_name,
+        COALESCE(g.group_name, 'No Group') AS group_name,
         g.color AS group_color
       FROM cart_items ci
       JOIN users u ON ci.user_id = u.user_id
@@ -438,7 +625,7 @@ app.get("/api/price-history", async (_req: Request, res: Response) => {
 app.get("/api/group-members", async (_req: Request, res: Response) => {
   try {
     const result = await pool.query(
-      "SELECT * FROM group_members ORDER BY membership_id ASC"
+      "SELECT * FROM group_members ORDER BY group_id ASC, user_id ASC"
     );
     res.status(200).json(result.rows);
   } catch (error) {
@@ -447,7 +634,371 @@ app.get("/api/group-members", async (_req: Request, res: Response) => {
   }
 });
 
+// Create a wishlist row. User comes from JWT (req.user), NOT from the request body — safer.
+app.post(
+  "/api/cart-items",
+  authenticateToken,
+  async (req: AuthRequest<CreateCartItemBody>, res: Response) => {
+  try 
+  {
+    const user_id = req.user!.userId;
+    const 
+    {
+      group_id,
+      item_name,
+      product_url,
+      image_url,
+      store,
+      current_price,
+      notes
+    } = req.body;
+
+    if (!item_name || !product_url || current_price === undefined) {
+      return res.status(400).json({
+        message: "Missing required fields (item_name, product_url, current_price)"
+      });
+    }
+    if (Number(current_price) < 0) {
+      return res.status(400).json({
+        message: "current_price must be a non-negative number"
+      });
+    }
+
+    const itemResult = await pool.query(
+      `
+      INSERT INTO cart_items 
+      (user_id, group_id, item_name, product_url, image_url, store, current_price, notes, is_purchased)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false)
+      RETURNING item_id
+      `,
+      [
+        user_id,
+        group_id || null,
+        item_name,
+        product_url,
+        image_url ?? null,
+        store ?? null,
+        current_price,
+        notes || null
+      ]
+    );
+
+    // STEP 4: Get the new item's ID
+    // PostgreSQL returns the new item_id so we can use it next
+    const newItemId = itemResult.rows[0].item_id;
+
+    // STEP 5: Insert into price_history
+    // This starts tracking the item's price over time
+    await pool.query(
+      `
+      INSERT INTO price_history (item_id, price)
+      VALUES ($1, $2)
+      `,
+      [newItemId, current_price]
+    );
+
+    // STEP 6: Send success response back to frontend
+    // This tells React/extension that everything worked
+    res.status(201).json({
+      message: "Item saved successfully",
+      item_id: newItemId
+    });
+
+  } catch (error) {
+    // ERROR HANDLING
+    console.error("Error saving item:", error);
+
+    res.status(500).json({
+      message: "Failed to save item"
+    });
+  }
+  }
+);
+
+app.patch(
+  "/api/cart-items/:id",
+  authenticateToken,
+  async (req: AuthRequest<UpdateCartItemBody, { id: string }>, res: Response) => {
+    try {
+      const item_id = Number(req.params.id);
+      const owner_id = req.user!.userId;
+      if (isNaN(item_id)) {
+        return res.status(400).json({ message: "Invalid item ID" });
+      }
+
+      const fieldsToUpdate: string[] = [];
+      const values: Array<string | number | boolean | null> = [];
+      let valueIndex = 1;
+
+      const {
+        group_id,
+        item_name,
+        product_url,
+        image_url,
+        store,
+        current_price,
+        notes,
+        is_purchased,
+        purchase_price,
+      } = req.body;
+
+      if (group_id !== undefined) {
+        fieldsToUpdate.push(`group_id = $${valueIndex++}`);
+        values.push(group_id);
+      }
+      if (item_name !== undefined) {
+        fieldsToUpdate.push(`item_name = $${valueIndex++}`);
+        values.push(item_name);
+      }
+      if (product_url !== undefined) {
+        fieldsToUpdate.push(`product_url = $${valueIndex++}`);
+        values.push(product_url);
+      }
+      if (image_url !== undefined) {
+        fieldsToUpdate.push(`image_url = $${valueIndex++}`);
+        values.push(image_url);
+      }
+      if (store !== undefined) {
+        fieldsToUpdate.push(`store = $${valueIndex++}`);
+        values.push(store);
+      }
+      if (current_price !== undefined) {
+        if (Number(current_price) < 0) {
+          return res.status(400).json({
+            message: "current_price must be a non-negative number",
+          });
+        }
+        fieldsToUpdate.push(`current_price = $${valueIndex++}`);
+        values.push(current_price);
+      }
+      if (notes !== undefined) {
+        fieldsToUpdate.push(`notes = $${valueIndex++}`);
+        values.push(notes);
+      }
+      if (is_purchased !== undefined) {
+        fieldsToUpdate.push(`is_purchased = $${valueIndex++}`);
+        values.push(is_purchased);
+      }
+      if (purchase_price !== undefined) {
+        if (purchase_price !== null && Number(purchase_price) < 0) {
+          return res.status(400).json({
+            message: "purchase_price must be null or a non-negative number",
+          });
+        }
+        fieldsToUpdate.push(`purchase_price = $${valueIndex++}`);
+        values.push(purchase_price);
+      }
+
+      if (fieldsToUpdate.length === 0) {
+        return res.status(400).json({
+          message: "No valid fields were provided for update",
+        });
+      }
+
+      const ownerCheck = await pool.query(
+        `
+        SELECT user_id
+        FROM cart_items
+        WHERE item_id = $1
+        `,
+        [item_id]
+      );
+
+      if (ownerCheck.rows.length === 0) {
+        return res.status(404).json({ message: "Item not found" });
+      }
+
+      if (ownerCheck.rows[0].user_id !== owner_id) {
+        return res.status(403).json({ message: "You cannot update this item" });
+      }
+
+      values.push(item_id);
+      const result = await pool.query(
+        `
+        UPDATE cart_items
+        SET ${fieldsToUpdate.join(", ")}
+        WHERE item_id = $${valueIndex}
+        RETURNING *
+        `
+      , values);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Item not found" });
+      }
+
+      return res.status(200).json({
+        message: "Item updated successfully",
+        item: result.rows[0],
+      });
+    } catch (error) {
+      console.error("Update item failed:", error);
+      return res.status(500).json({ message: "Failed to update item" });
+    }
+  }
+);
+
+app.delete("/api/cart-items/:id", authenticateToken, async (req: AuthRequest<any, { id: string }>, res: Response) => {
+  try {
+    const item_id = Number(req.params.id);
+    const owner_id = req.user!.userId;
+
+    if (isNaN(item_id)) {
+      return res.status(400).json({
+        message: "Invalid item ID",
+      });
+    }
+
+    const ownerCheck = await pool.query(
+      `
+      SELECT user_id
+      FROM cart_items
+      WHERE item_id = $1
+      `,
+      [item_id]
+    );
+
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({
+        message: "Item not found",
+      });
+    }
+
+    if (ownerCheck.rows[0].user_id !== owner_id) {
+      return res.status(403).json({
+        message: "You cannot delete this item",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      DELETE FROM cart_items
+      WHERE item_id = $1
+      RETURNING item_id
+      `,
+      [item_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        message: "Item not found",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Item deleted successfully",
+      item_id: result.rows[0].item_id,
+    });
+  } catch (error) {
+    console.error("Delete item failed:", error);
+    return res.status(500).json({
+      message: "Failed to delete item",
+    });
+  }
+});
+
+app.get("/api/cart-items/:id/notes", authenticateToken, async (req: AuthRequest<any, { id: string }>, res: Response) => {
+  try {
+    const item_id = Number(req.params.id);
+    const owner_id = req.user!.userId;
+    if (isNaN(item_id)) {
+      return res.status(400).json({ message: "Invalid item ID" });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT item_id, user_id, notes
+      FROM cart_items
+      WHERE item_id = $1
+      `,
+      [item_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Item not found" });
+    }
+
+    if (result.rows[0].user_id !== owner_id) {
+      return res.status(403).json({ message: "You cannot view notes for this item" });
+    }
+
+    return res.status(200).json({
+      item_id: result.rows[0].item_id,
+      notes: result.rows[0].notes,
+    });
+  } catch (error) {
+    console.error("Fetch item notes failed:", error);
+    return res.status(500).json({ message: "Failed to fetch item notes" });
+  }
+});
+
+app.patch(
+  "/api/cart-items/:id/notes",
+  authenticateToken,
+  async (req: AuthRequest<{ notes: string | null }, { id: string }>, res: Response) => {
+    try {
+      const item_id = Number(req.params.id);
+      const owner_id = req.user!.userId;
+      const { notes } = req.body;
+
+      if (isNaN(item_id)) {
+        return res.status(400).json({ message: "Invalid item ID" });
+      }
+      if (notes !== null && typeof notes !== "string") {
+        return res.status(400).json({ message: "notes must be a string or null" });
+      }
+
+      const ownerCheck = await pool.query(
+        `
+        SELECT user_id
+        FROM cart_items
+        WHERE item_id = $1
+        `,
+        [item_id]
+      );
+
+      if (ownerCheck.rows.length === 0) {
+        return res.status(404).json({ message: "Item not found" });
+      }
+
+      if (ownerCheck.rows[0].user_id !== owner_id) {
+        return res.status(403).json({ message: "You cannot update notes for this item" });
+      }
+
+      const result = await pool.query(
+        `
+        UPDATE cart_items
+        SET notes = $1
+        WHERE item_id = $2
+        RETURNING item_id, notes
+        `,
+        [notes, item_id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Item not found" });
+      }
+
+      return res.status(200).json({
+        message: "Item notes updated successfully",
+        item: result.rows[0],
+      });
+    } catch (error) {
+      console.error("Update item notes failed:", error);
+      return res.status(500).json({ message: "Failed to update item notes" });
+    }
+  }
+);
+
 // START SERVER
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on http://0.0.0.0:${PORT}`);
+async function startServer(): Promise<void> {
+  await initializeDatabase();
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
+  });
+}
+
+startServer().catch((error) => {
+  console.error("Server startup failed:", error);
+  process.exit(1);
 });

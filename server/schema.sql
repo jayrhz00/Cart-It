@@ -1,6 +1,10 @@
 -- Jessie Hernandez 700775688
 -- Cart-It DB Schema 
 -- Stores raw PostgreSQL table definitions
+--
+-- STUDENT DEMO TIP: This file defines all 6 tables. The API runs it once at startup
+-- (initializeDatabase in index.ts) so your database always matches this file.
+-- In psql use \dt to list tables, \d table_name to show columns.
 
 -- TABLE 1: users
 -- Stores each registered Cart-It user
@@ -23,8 +27,8 @@ CREATE TABLE IF NOT EXISTS groups
     group_id SERIAL PRIMARY KEY,                                -- Unique ID for each group
     owner_id INTEGER NOT NULL,                                  -- User who owns this group
     group_name VARCHAR(100) NOT NULL,                           -- Name of group/category
-    color VARCHAR(20) NOT NULL,                                -- Color label for UI display
-    visibility VARCHAR(20) NOT NULL,                            -- Controls whether the group is private or shared 
+    color VARCHAR(20) DEFAULT '#6B7280' NOT NULL,              -- Color label for UI display
+    visibility VARCHAR(20) DEFAULT 'Private' NOT NULL,         -- Controls whether the group is private or shared 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,   -- Stores when the group was created (auto)
 
     -- Verifies that owner_id matches a real user in the users table 
@@ -83,10 +87,11 @@ CREATE TABLE IF NOT EXISTS cart_items
     user_id INTEGER NOT NULL,                                    -- User who saved this item, every item must belong to a user
     group_id INTEGER,                                            -- Group/category this item belongs to / NULL = item is just in the cart (not categorized)
     item_name VARCHAR(255) NOT NULL,                             -- Name of product (ex: "Gym Shark Leggings")
-    url TEXT NOT NULL,                                           -- Link to product page
+    product_url TEXT NOT NULL,                                   -- Link to product page
     image_url TEXT,                                              -- Image of product
     store VARCHAR(100),                                          -- Store/website name (ex: Gymshark, Walmart)
     current_price NUMERIC(10,2),                                 -- Current price of item (changes over time)
+    notes TEXT,                                                  -- Private internal notes (size, quality, etc.)
     is_purchased BOOLEAN DEFAULT FALSE NOT NULL,                 -- Tracks if user bought the item, Default = false cannot be NULL
     purchase_price NUMERIC(10,2),                                -- Price the user actually paid (if purchased)
     purchase_date TIMESTAMP,                                     -- When item was purchased
@@ -167,4 +172,5 @@ INSERT INTO users (username,email, password_hash)
 VALUES 
 ('jessieh', 'jessie@example.com', '$2b$10$hashed1'),
 ('alexm', 'alex@gmail.com', '$2b$10$hashed2'),
-('sarahk', 'sarah@yahoo.com', '$2b$10$hashed3');
+('sarahk', 'sarah@yahoo.com', '$2b$10$hashed3')
+ON CONFLICT (email) DO NOTHING;

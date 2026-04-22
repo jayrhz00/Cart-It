@@ -1,0 +1,27 @@
+.landing-container { min-height: 100vh; background: #fff; }
+.landing-header { padding: 16px 24px; border-bottom: 1px solid #e5e7eb; }
+.logo-img { width: 130px; height: auto; }
+.hero-section { position: relative; padding: 90px 24px; text-align: center; color: #fff; background: linear-gradient(135deg, #4a103d, #db8046); }
+.hero-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.25); }
+.hero-content { position: relative; z-index: 1; max-width: 860px; margin: 0 auto; }
+.hero-title { font-size: 3rem; margin: 0 0 12px; }
+.hero-subtitle { font-size: 1.1rem; margin-bottom: 20px; }
+.hero-buttons { display: flex; gap: 12px; justify-content: center; }
+.btn-register, .btn-login { padding: 10px 16px; border-radius: 8px; color: #fff; font-weight: 700; }
+.btn-register { background: #f97316; }
+.btn-login { background: #334155; }
+.section-padding { padding: 64px 24px; background: #f8fafc; }
+.steps-wrapper { max-width: 1000px; margin: 0 auto; text-align: center; }
+.section-title { margin: 0 0 8px; font-size: 2rem; }
+.section-subtitle { margin-bottom: 24px; color: #64748b; }
+.steps-grid, .features-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; max-width: 1000px; margin: 0 auto; }
+.step-card, .feature-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; }
+.step-title, .feature-title { margin: 0 0 8px; }
+.step-desc, .feature-desc { color: #64748b; margin: 0; }
+.features-section { padding: 40px 24px 80px; }
+.feature-icon { font-size: 1.5rem; margin-bottom: 8px; }
+
+@media (max-width: 900px) {
+  .steps-grid, .features-grid { grid-template-columns: 1fr; }
+  .hero-title { font-size: 2.2rem; }
+}
