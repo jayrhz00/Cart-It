@@ -10,11 +10,11 @@
 
 export interface User            // Defines the object as "User" that other files will be able to use 
 {
-    userId: number;             // Every user gets a unique # as their ID (auto-generated)
+    user_id: number;             // Every user gets a unique # as their ID (auto-generated)
     username: string;          // Displays user's username 
     email: string;            // Email address for login 
-    passwordHash: string;    // Security technique to create hashed password
-    createdAt: Date;        // Timestamp of when the account was created  
+    password_hash: string;    // Security technique to create hashed password
+    created_at: Date;        // Timestamp of when the account was created  
 }
 
 // ---- GROUP ----
@@ -24,13 +24,22 @@ export interface User            // Defines the object as "User" that other file
 
 export interface Group
 {
-    groupId: number;             // Unique ID
-    ownerId: number;            // Which user owns this group (links to User.userId) 
-    groupName: string;         // Category name 
-    color: string;            // Color of sidebar label
-    visibility: string;      // "Private" or "Shared"
-    createdAt: Date;        // Timestamp when group was created  
+    group_id: number;                  // Unique ID
+    owner_id: number;                  // Which user owns this group (links to User.userId) 
+    group_name: string;               // Category name 
+    color?: string | null;            // Color of sidebar label
+    visibility?: string | null;       // "Private" or "Shared"
+    created_at: Date;                  // Timestamp when group was created  
 }
+
+export interface InsertGroup 
+{
+    owner_id: number;
+    group_name: string;
+    color?: string | null;
+    visibility?: string | null;
+}
+
 
 // ---- GROUP MEMBER ----
 // Connects users to shared groups (many-to-many)
@@ -38,10 +47,10 @@ export interface Group
 
 export interface GroupMember
 {
-    groupId: number;       // PK/FK Group.groupId     
-    userId: number;       // PK/FK User.userId  
+    group_id: number;       // PK/FK Group.groupId     
+    user_id: number;       // PK/FK User.userId  
     role: string;        // "Owner" or "Editor" 
-    joinedAt: Date;     // Timestamp of when member was added
+    joined_at: Date;     // Timestamp of when member was added
 
 }
 
@@ -51,9 +60,9 @@ export interface GroupMember
 
 export interface Cart
 {
-    cartId: number;                 // Primary key: unique ID for each cart
-    userId: number;                 // Which user owns this cart 
-    createdAt: Date;                // Timestamp of when the cart was created 
+    cart_id: number;                 // Primary key: unique ID for each cart
+    user_id: number;                 // Which user owns this cart 
+    created_at: Date;                // Timestamp of when the cart was created 
 }
 
 // ---- ITEM ----
@@ -62,18 +71,18 @@ export interface Cart
 
 export interface Item
 {
-    itemId: number;                   // Unique ID for each saved item
-    cartId: number | null;           // Null if item is stored in group 
-    groupId: number | null;         // Null if item is stored in cart
-    addedByUserId: number;         // FK -> User.userId records who saved the item
+    item_id: number;                   // Unique ID for each saved item
+    cart_id: number | null;           // Null if item is stored in group 
+    group_id: number | null;         // Null if item is stored in cart
+    added_by_user_id: number;         // FK -> User.userId records who saved the item
 
-    productName: string;            // Product's name 
-    productUrl: string;             // Link to product page
-    imageUrl: string;               // Link to product image url
-    storeName: string;              // Which store/site product is in
-    currentPrice: number;           // Current known price of item
+    product_name: string;            // Product's name 
+    product_url: string;             // Link to product page
+    image_url: string;               // Link to product image url
+    store_name: string;              // Which store/site product is in
+    current_price: number;           // Current known price of item
     notes: string;                  // Private internal notes user can make about the item 
-    isPurchased: boolean;           // Has the user bought this item before? T/F 
+    is_purchased: boolean;           // Has the user bought this item before? T/F 
 }
 
 
@@ -84,10 +93,10 @@ export interface Item
 
 export interface PriceHistory 
 {
-    historyId: number;              // Unique ID for each price record
-    itemId: number;                 // Which cart item this price is for 
+    history_id: number;              // Unique ID for each price record
+    item_id: number;                 // Which cart item this price is for 
     price: number;                  // Current price at the time of check
-    checkedAt: Date;                // When the price was checked 
+    checked_at: Date;                // When the price was checked 
 }
 
 // ---- NOTIFICATION ----
@@ -96,22 +105,22 @@ export interface PriceHistory
 
 export interface Notification 
 {
-    notificationId: number;         // Unique ID for each notification
-    userId: number;                 // Who gets notified
-    itemId: number;                 // Which item dropped in price
+    notification_id: number;         // Unique ID for each notification
+    user_id: number;                 // Who gets notified
+    item_id: number;                 // Which item dropped in price
     message: string;                // Notification message 
-    isRead: boolean;                // Has the notification been read?
-    createdAt: Date;                // Timestamp of when notification was created 
+    is_read: boolean;                // Has the notification been read?
+    created_at: Date;                // Timestamp of when notification was created 
 }
 
 // ---- INSERT TYPES ----
 // When creating new records, id and timestamps are auto generated
 // These types represent what the user fills in
 
-export type InsertUser = Omit<User, "userId" | "createdAt">;
-export type InsertGroup = Omit<Group, "groupId" | "createdAt">;
-export type InsertGroupMember = Omit<GroupMember, "joinedAt">;
-export type InsertCart = Omit<Cart, "cartId" | "createdAt">;
-export type InsertItem= Omit<Item, "itemId">;
-export type InsertPriceHistory = Omit<PriceHistory, "historyId">;
-export type InsertNotification = Omit<Notification, "notificationId" | "createdAt">;
+export type InsertUser = Omit<User, "user_id" | "created_at">;
+//export type InsertGroup = Omit<Group, "group_id" | "created_at">;
+export type InsertGroupMember = Omit<GroupMember, "joined_at">;
+export type InsertCart = Omit<Cart, "cart_id" | "created_at">;
+export type InsertItem= Omit<Item, "item_id">;
+export type InsertPriceHistory = Omit<PriceHistory, "history_id">;
+export type InsertNotification = Omit<Notification, "notification_id" | "created_at">;

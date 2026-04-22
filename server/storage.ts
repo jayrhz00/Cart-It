@@ -31,44 +31,44 @@ import { pool } from "./db";
 export interface IStorage 
 {
     // ---- USER OPERATIONS ----
-    getUser(userId:number): Promise<User | undefined>;                      // Gets a user by their unique ID from the database, returns promise due to db queries
+    getUser(user_id:number): Promise<User | undefined>;                      // Gets a user by their unique ID from the database, returns promise due to db queries
     getUserByEmail(email: string): Promise<User | undefined>;               // Gets user by email (used for login)
     createUser(user: InsertUser): Promise<User>;                            // Creates new user in db, takes in data from signup form, returns full user object
 
     // ---- GROUP OPERATIONS ----
-    getGroup(groupId: number): Group | undefined;                            // Find one group by ID  
-    getGroupsByOwner(ownerId: number): Group[];                              // Get all groups owned by one user 
-    createGroup(group: InsertGroup): Group;                                  // Create new group
-    updateGroup(groupId: number, group: Partial<Group>): Group | undefined;  // Updates group name or color 
-    deleteGroup(groupId: number): boolean;                                   // True --> Group exists and can be deleted. False --> Group not found 
+    getGroup(group_id: number): Promise<Group | undefined>;                            // Find one group by ID  
+    getGroupsByOwner(owner_id: number): Promise<Group[]>;                              // Get all groups owned by one user 
+    createGroup(group: InsertGroup): Promise<Group>;                                  // Create new group
+    updateGroup(group_id: number, group: Partial<Group>): Promise<Group> | undefined;  // Updates group name or color 
+    deleteGroup(group_id: number): Promise<boolean>;                                   // True --> Group exists and can be deleted. False --> Group not found 
 
     // ---- GROUP MEMBER OPERATIONS ----
-    getGroupMembers(groupId: number): GroupMember[];                        // Returns a list of all members in a shared group
-    addGroupMember(member: InsertGroupMember): GroupMember;                 // Add collaborator
-    removeGroupMember(groupId: number, userId: number): boolean;            // Removes a user from a group
+    getGroupMembers(group_id: number): Promise<GroupMember[]>;                        // Returns a list of all members in a shared group
+    addGroupMember(member: InsertGroupMember): Promise<GroupMember>;                // Add collaborator
+    removeGroupMember(group_id: number, userId: number): Promise<boolean>;           // Removes a user from a group
 
     // ---- CART OPERATIONS ----
-    getCartByUser(userId: number): Cart | undefined;                         // Finds the cart that belongs to a user
-    getCart(cartId: number): Cart | undefined;                               // Find cart by cart ID
-    createCart(cart: InsertCart): Cart;                                      // Create a new cart for user
+    getCartByUser(user_id: number): Promise<Cart | undefined>;                         // Finds the cart that belongs to a user
+    getCart(cart_id: number): Promise<Cart | undefined>;                               // Find cart by cart ID
+    createCart(cart: InsertCart): Promise<Cart>;                                      // Create a new cart for user
 
     // ---- ITEM OPERATIONS ----
-    getItem(itemId: number): Item | undefined;                               // Get a single item by id or returns undefined if not found 
-    getItemsByCart(cartId: number): Item[];                                  // Get all items in a cart 
-    getItemsByGroup(groupId: number): Item[];                                // Get all items in a group
-    getItemsByUser(userId: number): Item[];                                  // Get all items added by a user
-    createItem(item: InsertItem): Item;                                      // Create new saved item
-    updateItem(itemId: number, item: Partial<Item>): Item | undefined;       // Update item (internal notes or purchased)  
-    deleteItem(itemId: number): boolean;                                     // Delete an item by ID 
+    getItem(item_id: number): Promise<Item | undefined>;                               // Get a single item by id or returns undefined if not found 
+    getItemsByCart(cart_id: number): Promise<Item[]>;                                  // Get all items in a cart 
+    getItemsByGroup(group_id: number): Promise<Item[]>;                                // Get all items in a group
+    getItemsByUser(user_id: number): Promise<Item[]>;                                  // Get all items added by a user
+    createItem(item: InsertItem): Promise<Item>;                                      // Create new saved item
+    updateItem(item_id: number, item: Partial<Item>): Promise<Item | undefined>;       // Update item (internal notes or purchased)  
+    deleteItem(item_id: number): Promise<boolean>;                                     // Delete an item by ID 
 
     // ---- PRICE HISTORY OPERATIONS ----
-    getPriceHistory(itemId: number): PriceHistory[];                        // Returns a list of all price records for item
-    addPriceRecord(record: InsertPriceHistory): PriceHistory;               // Save new price history record
+    getPriceHistory(item_id: number): Promise<PriceHistory[]>;                        // Returns a list of all price records for item
+    addPriceRecord(record: InsertPriceHistory): Promise<PriceHistory>;               // Save new price history record
 
     // ---- NOTIFICATION OPERATIONS ----
-    getNotificationsByUser(userId: number): Notification[];                   // Returns list of notifications for user 
-    createNotification(notification: InsertNotification): Notification;       // Create notification (price drop)
-    markNotificationAsRead(notificationId: number): Notification | undefined; // Mark notification as read
+    getNotificationsByUser(user_id: number): Promise<Notification[]>;                   // Returns list of notifications for user 
+    createNotification(notification: InsertNotification): Promise<Notification>;       // Create notification (price drop)
+    markNotificationAsRead(notification_id: number): Promise<Notification | undefined>; // Mark notification as read
 }
 
 //---- MEMORY STORAGE ----
@@ -133,9 +133,9 @@ export class MemStorage implements IStorage
     // ---- USER METHODS ----
     // Responsible for finding and creating users
 
-    async getUser(userId: number): Promise<User | undefined>  // If the user does not exist, return undefined
+    async getUser(user_id: number): Promise<User | undefined>  // If the user does not exist, return undefined
     {
-        return this.users.get(userId);        // Look in the users Map using the userId as the key
+        return this.users.get(user_id);        // Look in the users Map using the userId as the key
     }
 
     // Checks to see if email is registered 
@@ -157,45 +157,45 @@ export class MemStorage implements IStorage
     {
         const user: User =      // Adds values ex. userId & createdAt
         {
-            userId: this.currentUserId++,   // Use current user ID and increment by 1 for next user 
+            user_id: this.currentUserId++,   // Use current user ID and increment by 1 for next user 
             ...insertUser,                  // Copy all user input fields from insertUser into new object
-            createdAt: new Date()           // Adds current date and time for when user is created 
+            created_at: new Date()           // Adds current date and time for when user is created 
         };
 
-        this.users.set(user.userId, user);  // Saves new user in user maps, Key = userId, Value = full user object
+        this.users.set(user.user_id, user);  // Saves new user in user maps, Key = userId, Value = full user object
         return user;
     }
 
     // ---- GROUP METHODS ----
 
-    getGroup(groupId: number): Group | undefined
+    async getGroup(group_id: number): Promise<Group> | undefined
     {
-        return this.groups.get(groupId);
+        return this.groups.get(group_id);
     }
 
-    getGroupsByOwner(ownerId: number): Group[]
+    async getGroupsByOwner(owner_id: number): Promise<Group[]>
     {
         return Array.from(this.groups.values()).filter(
-            (group) => group.ownerId === ownerId
+            (group) => group.owner_id === owner_id
         );
     }
 
-    createGroup(insertGroup: InsertGroup): Group
+    async createGroup(insertGroup: InsertGroup): Promise<Group>
     {
         const group: Group =
         {
-            groupId: this.currentGroupId++,
+            group_id: this.currentGroupId++,
             ...insertGroup,
-            createdAt: new Date()
+            created_at: new Date()
         };
 
-        this.groups.set(group.groupId, group);
+        this.groups.set(group.group_id, group);
         return group;
     }
 
-    updateGroup(groupId: number, updatedFields: Partial<Group>): Group | undefined
+    async updateGroup(group_id: number, updatedFields: Partial<Group>): Promise<Group> | undefined
     {
-        const existingGroup = this.groups.get(groupId);
+        const existingGroup = this.groups.get(group_id);
 
         if (!existingGroup)
         {
@@ -206,54 +206,54 @@ export class MemStorage implements IStorage
         {
             ...existingGroup,
             ...updatedFields,
-            groupId: existingGroup.groupId
+            group_id: existingGroup.group_id
         };
 
-        this.groups.set(groupId, updatedGroup);
+        this.groups.set(group_id, updatedGroup);
         return updatedGroup;
     }
 
-    deleteGroup(groupId: number): boolean
+    async deleteGroup(group_id: number): Promise<boolean>
     {
-        return this.groups.delete(groupId);
+        return this.groups.delete(group_id);
     }
 
     // ---- GROUP MEMBER METHODS ----
 
-    getGroupMembers(groupId: number): GroupMember[]
+    async getGroupMembers(group_id: number): Promise<GroupMember[]>
     {
         return Array.from(this.groupMembers.values()).filter(
-            (member) => member.groupId === groupId
+            (member) => member.group_id === group_id
         );
     }
 
-    addGroupMember(insertMember: InsertGroupMember): GroupMember
+    async addGroupMember(insertMember: InsertGroupMember): Promise<GroupMember>
     {
         const member: GroupMember =
         {
             ...insertMember,
-            joinedAt: new Date()
+            joined_at: new Date()
         };
 
-        const key = this.makeGroupMemberKey(member.groupId, member.userId);
+        const key = this.makeGroupMemberKey(member.group_id, member.user_id);
         this.groupMembers.set(key, member);
 
         return member;
     }
 
-    removeGroupMember(groupId: number, userId: number): boolean
+    async removeGroupMember(group_id: number, user_id: number): Promise<boolean>
     {
-        const key = this.makeGroupMemberKey(groupId, userId);
+        const key = this.makeGroupMemberKey(group_id, user_id);
         return this.groupMembers.delete(key);
     }
 
     // ---- CART METHODS ----
 
-    getCartByUser(userId: number): Cart | undefined
+    async getCartByUser(user_id: number): Promise<Cart | undefined>
     {
         for (const cart of this.carts.values())
         {
-            if (cart.userId === userId)
+            if (cart.user_id === user_id)
             {
                 return cart;
             }
@@ -262,58 +262,58 @@ export class MemStorage implements IStorage
         return undefined;
     }
 
-    getCart(cartId: number): Cart | undefined
+    async getCart(cart_id: number): Promise<Cart | undefined>
     {
-        return this.carts.get(cartId);
+        return this.carts.get(cart_id);
     }
 
-    createCart(insertCart: InsertCart): Cart
+    async createCart(insertCart: InsertCart): Promise<Cart>
     {
         const cart: Cart =
         {
-            cartId: this.currentCartId++,
+            cart_id: this.currentCartId++,
             ...insertCart,
-            createdAt: new Date()
+            created_at: new Date()
         };
 
-        this.carts.set(cart.cartId, cart);
+        this.carts.set(cart.cart_id, cart);
         return cart;
     }
 
     // ---- ITEM METHODS ----
 
-    getItem(itemId: number): Item | undefined
+    async getItem(item_id: number): Promise<Item | undefined>
     {
-        return this.items.get(itemId);
+        return this.items.get(item_id);
     }
 
-    getItemsByCart(cartId: number): Item[]
+    async getItemsByCart(cart_id: number): Promise<Item[]>
     {
         return Array.from(this.items.values()).filter(
-            (item) => item.cartId === cartId
+            (item) => item.cart_id === cart_id
         );
     }
 
-    getItemsByGroup(groupId: number): Item[]
+    async getItemsByGroup(group_id: number): Promise<Item[]>
     {
         return Array.from(this.items.values()).filter(
-            (item) => item.groupId === groupId
+            (item) => item.group_id === group_id
         );
     }
 
-    getItemsByUser(userId: number): Item[]
+    async getItemsByUser(user_id: number): Promise<Item[]>
     {
         return Array.from(this.items.values()).filter(
-            (item) => item.addedByUserId === userId
+            (item) => item.added_by_user_id === user_id
         );
     }
 
-    createItem(insertItem: InsertItem): Item
+    async createItem(insertItem: InsertItem): Promise<Item>
     {
         // Validation rule:
         // Exactly one location must be set.
-        const hasCart = insertItem.cartId !== null;
-        const hasGroup = insertItem.groupId !== null;
+        const hasCart = insertItem.cart_id !== null;
+        const hasGroup = insertItem.group_id !== null;
 
         if ((hasCart && hasGroup) || (!hasCart && !hasGroup))
         {
@@ -322,17 +322,17 @@ export class MemStorage implements IStorage
 
         const item: Item =
         {
-            itemId: this.currentItemId++,
+            item_id: this.currentItemId++,
             ...insertItem
         };
 
-        this.items.set(item.itemId, item);
+        this.items.set(item.item_id, item);
         return item;
     }
 
-    updateItem(itemId: number, updatedFields: Partial<Item>): Item | undefined
+    async updateItem(item_id: number, updatedFields: Partial<Item>): Promise<Item | undefined>
     {
-        const existingItem = this.items.get(itemId);
+        const existingItem = this.items.get(item_id);
 
         if (!existingItem)
         {
@@ -343,72 +343,72 @@ export class MemStorage implements IStorage
         {
             ...existingItem,
             ...updatedFields,
-            itemId: existingItem.itemId
+            item_id: existingItem.item_id
         };
 
-        const hasCart = updatedItem.cartId !== null;
-        const hasGroup = updatedItem.groupId !== null;
+        const hasCart = updatedItem.cart_id !== null;
+        const hasGroup = updatedItem.group_id !== null;
 
         if ((hasCart && hasGroup) || (!hasCart && !hasGroup))
         {
             throw new Error("Updated item must belong to either a cart or a group, but not both.");
         }
 
-        this.items.set(itemId, updatedItem);
+        this.items.set(item_id, updatedItem);
         return updatedItem;
     }
 
-    deleteItem(itemId: number): boolean
+    async deleteItem(item_id: number): Promise<boolean>
     {
-        return this.items.delete(itemId);
+        return this.items.delete(item_id);
     }
 
     // ---- PRICE HISTORY METHODS ----
 
-    getPriceHistory(itemId: number): PriceHistory[]
+    async getPriceHistory(item_id: number): Promise<PriceHistory[]>
     {
         return Array.from(this.priceHistoryRecords.values()).filter(
-            (record) => record.itemId === itemId
+            (record) => record.item_id === item_id
         );
     }
 
-    addPriceRecord(insertRecord: InsertPriceHistory): PriceHistory
+    async addPriceRecord(insertRecord: InsertPriceHistory): Promise<PriceHistory>
     {
         const record: PriceHistory =
         {
-            historyId: this.currentHistoryId++,
+            history_id: this.currentHistoryId++,
             ...insertRecord
         };
 
-        this.priceHistoryRecords.set(record.historyId, record);
+        this.priceHistoryRecords.set(record.history_id, record);
         return record;
     }
 
     // ---- NOTIFICATION METHODS ----
 
-    getNotificationsByUser(userId: number): Notification[]
+    async getNotificationsByUser(user_id: number): Promise<Notification[]>
     {
         return Array.from(this.notifications.values()).filter(
-            (notification) => notification.userId === userId
+            (notification) => notification.user_id === user_id
         );
     }
 
-    createNotification(insertNotification: InsertNotification): Notification
+    async createNotification(insertNotification: InsertNotification): Promise<Notification>
     {
         const notification: Notification =
         {
-            notificationId: this.currentNotificationId++,
+            notification_id: this.currentNotificationId++,
             ...insertNotification,
-            createdAt: new Date()
+            created_at: new Date()
         };
 
-        this.notifications.set(notification.notificationId, notification);
+        this.notifications.set(notification.notification_id, notification);
         return notification;
     }
 
-    markNotificationAsRead(notificationId: number): Notification | undefined
+    async markNotificationAsRead(notification_id: number): Promise<Notification | undefined>
     {
-        const existingNotification = this.notifications.get(notificationId);
+        const existingNotification = this.notifications.get(notification_id);
 
         if (!existingNotification)
         {
@@ -418,10 +418,10 @@ export class MemStorage implements IStorage
         const updatedNotification: Notification =
         {
             ...existingNotification,
-            isRead: true
+            is_read: true
         };
 
-        this.notifications.set(notificationId, updatedNotification);
+        this.notifications.set(notification_id, updatedNotification);
         return updatedNotification;
     }
 }
@@ -435,15 +435,15 @@ export class MemStorage implements IStorage
                 `INSERT INTO users (username, email, password_hash)
                  VALUES ($1, $2, $3)
                  RETURNING user_id, username, email, password_hash, created_at`,
-                 [user.username, user.email, user.passwordHash]
+                 [user.username, user.email, user.password_hash]
             );
             const row = result.rows[0];
             return{
-                userId: row.user_id,
+                user_id: row.user_id,
                 username: row.username,
                 email: row.email,
-                passwordHash: row.password_hash,
-                createdAt: row.created_at
+                password_hash: row.password_hash,
+                created_at: row.created_at
             };
         }
 
@@ -464,21 +464,21 @@ export class MemStorage implements IStorage
         const row = result.rows[0];
 
         return {
-            userId: row.user_id,
+            user_id: row.user_id,
             username: row.username,
             email: row.email,
-            passwordHash: row.password_hash,
-            createdAt: row.created_at
+            password_hash: row.password_hash,
+            created_at: row.created_at
         };
     }
 
         // Gets user by ID
-        async getUser(userId: number): Promise<User | undefined>
+        async getUser(user_id: number): Promise<User | undefined>
         {
             const result = await pool.query
             (
             "SELECT * FROM users WHERE user_id = $1",
-            [userId]
+            [user_id]
             );
 
         if (result.rows.length === 0) 
@@ -489,20 +489,88 @@ export class MemStorage implements IStorage
         const row = result.rows[0];
 
         return {
-            userId: row.user_id,
+            user_id: row.user_id,
             username: row.username,
             email: row.email,
-            passwordHash: row.password_hash,
-            createdAt: row.created_at
+            password_hash: row.password_hash,
+            created_at: row.created_at
         };
     }
 
-    // Everything else (for now)
-    getGroup(): any { throw new Error("Not implemented"); }
-    getGroupsByOwner(): any { throw new Error("Not implemented"); }
-    createGroup(): any { throw new Error("Not implemented"); }
-    updateGroup(): any { throw new Error("Not implemented"); }
-    deleteGroup(): any { throw new Error("Not implemented"); }
+    // Get 1 group by ID 
+    async getGroup(group_id: number): Promise<Group | undefined>
+{
+    // Ask PostgreSQL for the group with this ID
+    const result = await pool.query(
+        `SELECT * FROM groups WHERE group_id = $1`,
+        [group_id]
+    );
+
+    // If no group is found, return undefined
+    if (result.rows.length === 0)
+    {
+        return undefined;
+    }
+
+    // Otherwise return the group
+    return result.rows[0];
+}
+
+
+// Get ALL groups for a specific user
+async getGroupsByOwner(owner_id: number): Promise<Group[]>
+{
+    // Get all groups that belong to this user
+    const result = await pool.query(
+        `SELECT * FROM groups WHERE owner_id = $1 ORDER BY created_at DESC`,
+        [owner_id]
+    );
+
+    // Return list of groups
+    return result.rows;
+}
+
+
+// Create a NEW group
+async createGroup(group: InsertGroup): Promise<Group>
+{
+    // Insert a new group into PostgreSQL
+    const result = await pool.query(
+        `INSERT INTO groups (owner_id, group_name, color, visibility)
+         VALUES ($1, $2, $3, $4)
+         RETURNING *`,
+        [
+            group.owner_id,                   // which user owns this group
+            group.group_name,                // group name (ex: "Clothing")
+            group.color ?? null,            // color (or null if not provided)
+            group.visibility ?? "Private"  // default to Private
+        ]
+    );
+
+    // Return newly created group
+    return result.rows[0];
+}
+
+
+// Delete a group
+async deleteGroup(group_id: number): Promise<boolean>
+{
+    // Delete group from PostgreSQL
+    const result = await pool.query(
+        `DELETE FROM groups WHERE group_id = $1`,
+        [group_id]
+    );
+
+    // rowCount tells us if something was actually deleted
+    return (result.rowCount ?? 0) > 0;
+}
+
+
+// Update group (do this later)
+async updateGroup(): Promise<Group | undefined>
+{
+    throw new Error("Not implemented yet");
+}
 
     getGroupMembers(): any { throw new Error("Not implemented"); }
     addGroupMember(): any { throw new Error("Not implemented"); }

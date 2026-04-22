@@ -162,3 +162,9 @@ CREATE TABLE IF NOT EXISTS notifications
         ON DELETE CASCADE
 );
 
+-- Sample Data (USERS)
+INSERT INTO users (username,email, password_hash)
+VALUES 
+('jessieh', 'jessie@example.com', '$2b$10$hashed1'),
+('alexm', 'alex@gmail.com', '$2b$10$hashed2'),
+('sarahk', 'sarah@yahoo.com', '$2b$10$hashed3');
