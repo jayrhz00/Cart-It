@@ -13,8 +13,33 @@
 .create-wishlist-btn { background: #db8046; color: #fff; border: 0; border-radius: 12px; min-height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
 .create-wishlist-label { font-size: .85rem; }
 .wishlist-card { background: #fff; color: #111827; border-radius: 12px; padding: 10px; }
-.wishlist-img-placeholder { width: 100%; height: 90px; border-radius: 8px; }
-.wishlist-card-footer { display: flex; justify-content: space-between; margin-top: 8px; font-size: .9rem; gap: 8px; }
+.wishlist-card-swatch {
+  width: 100%;
+  min-height: 110px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  text-align: center;
+}
+.wishlist-card-name {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  line-height: 1.15;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  word-break: break-word;
+}
+.wishlist-card-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+  font-size: 0.85rem;
+  gap: 8px;
+  color: #64748b;
+}
 .empty-state { color: #e2e8f0; border: 1px dashed #e2e8f0; border-radius: 12px; padding: 14px; }
 .dashboard-card { background: #db8046; border-radius: 12px; padding: 18px; }
 .card-header { margin-top: 0; }
@@ -24,6 +49,8 @@
 .add-item-btn:hover { background: #ffedd5; }
 .modal-wide { width: min(420px, 92vw); max-height: 90vh; overflow-y: auto; }
 .modal-label { font-size: 12px; font-weight: 600; color: #334155; margin: 0; }
+.modal-error { margin: 0 0 8px; padding: 10px; background: #fee2e2; color: #991b1b; border-radius: 8px; font-size: 13px; }
+.save-btn:disabled { opacity: 0.7; cursor: wait; }
 .modal-content textarea, .modal-content select { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; }
 .cart-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; }
 .cart-placeholder { background: rgba(255,255,255,.25); border-radius: 8px; min-height: 70px; color: #fff; padding: 8px; overflow: hidden; }

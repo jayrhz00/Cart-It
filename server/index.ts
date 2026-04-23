@@ -323,7 +323,8 @@ app.post(
           email: existingUser.email,
         },
         process.env.JWT_SECRET as string,
-        { expiresIn: "1h" }
+        // Longer expiry for class demos (change to "1h" in production if you prefer).
+        { expiresIn: "7d" }
       );
 
       // Send token & safe user info to frontend
@@ -539,9 +540,13 @@ app.delete(
 // These help prove DB is connected and let
 // frontend pull real data
 
-app.get("/api/users", async (_req: Request, res: Response) => {
+app.get("/api/users", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const result = await pool.query("SELECT user_id, username, email, created_at FROM users ORDER BY user_id ASC");
+    const owner_id = req.user!.userId;
+    const result = await pool.query(
+      "SELECT user_id, username, email, created_at FROM users WHERE user_id = $1",
+      [owner_id]
+    );
     res.status(200).json(result.rows);
   } catch (error) {
     console.error("Fetch users failed:", error);
@@ -569,8 +574,9 @@ app.get("/api/cart-items", authenticateToken, async (req: AuthRequest, res: Resp
 });
 
 // Dashboard route (JOINS multiple tables together)
-app.get("/api/dashboard", async (_req: Request, res: Response) => {
+app.get("/api/dashboard", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
+    const owner_id = req.user!.userId;
     const result = await pool.query(`
       SELECT 
         ci.item_id,
@@ -586,8 +592,9 @@ app.get("/api/dashboard", async (_req: Request, res: Response) => {
       FROM cart_items ci
       JOIN users u ON ci.user_id = u.user_id
       LEFT JOIN groups g ON ci.group_id = g.group_id
+      WHERE ci.user_id = $1
       ORDER BY ci.item_id ASC;
-    `);
+    `, [owner_id]);
 
     res.status(200).json(result.rows);
   } catch (error) {
@@ -598,10 +605,12 @@ app.get("/api/dashboard", async (_req: Request, res: Response) => {
   }
 });
 
-app.get("/api/notifications", async (_req: Request, res: Response) => {
+app.get("/api/notifications", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
+    const owner_id = req.user!.userId;
     const result = await pool.query(
-      "SELECT * FROM notifications ORDER BY notification_id ASC"
+      "SELECT * FROM notifications WHERE user_id = $1 ORDER BY notification_id ASC",
+      [owner_id]
     );
     res.status(200).json(result.rows);
   } catch (error) {
@@ -610,10 +619,18 @@ app.get("/api/notifications", async (_req: Request, res: Response) => {
   }
 });
 
-app.get("/api/price-history", async (_req: Request, res: Response) => {
+app.get("/api/price-history", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
+    const owner_id = req.user!.userId;
     const result = await pool.query(
-      "SELECT * FROM price_history ORDER BY history_id ASC"
+      `
+      SELECT ph.*
+      FROM price_history ph
+      JOIN cart_items ci ON ci.item_id = ph.item_id
+      WHERE ci.user_id = $1
+      ORDER BY ph.history_id ASC
+      `,
+      [owner_id]
     );
     res.status(200).json(result.rows);
   } catch (error) {
@@ -622,10 +639,18 @@ app.get("/api/price-history", async (_req: Request, res: Response) => {
   }
 });
 
-app.get("/api/group-members", async (_req: Request, res: Response) => {
+app.get("/api/group-members", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
+    const owner_id = req.user!.userId;
     const result = await pool.query(
-      "SELECT * FROM group_members ORDER BY group_id ASC, user_id ASC"
+      `
+      SELECT gm.*
+      FROM group_members gm
+      JOIN groups g ON g.group_id = gm.group_id
+      WHERE g.owner_id = $1 OR gm.user_id = $1
+      ORDER BY gm.group_id ASC, gm.user_id ASC
+      `,
+      [owner_id]
     );
     res.status(200).json(result.rows);
   } catch (error) {
@@ -642,26 +667,51 @@ app.post(
   try 
   {
     const user_id = req.user!.userId;
-    const 
-    {
+    const {
       group_id,
       item_name,
       product_url,
       image_url,
       store,
       current_price,
-      notes
+      notes,
     } = req.body;
 
-    if (!item_name || !product_url || current_price === undefined) {
+    const itemName = typeof item_name === "string" ? item_name.trim() : "";
+    const productUrl = typeof product_url === "string" ? product_url.trim() : "";
+    const priceRaw =
+      current_price === undefined || current_price === null
+        ? 0
+        : Number(current_price);
+    const priceNum = Number.isFinite(priceRaw) ? priceRaw : NaN;
+
+    if (!itemName || !productUrl) {
       return res.status(400).json({
-        message: "Missing required fields (item_name, product_url, current_price)"
+        message: "Missing required fields (item_name, product_url)",
       });
     }
-    if (Number(current_price) < 0) {
+    if (Number.isNaN(priceNum) || priceNum < 0) {
       return res.status(400).json({
-        message: "current_price must be a non-negative number"
+        message: "current_price must be a non-negative number",
       });
+    }
+
+    let resolvedGroupId: number | null = null;
+    if (group_id != null) {
+      const gid = Number(group_id);
+      if (Number.isNaN(gid)) {
+        return res.status(400).json({ message: "Invalid category id" });
+      }
+      const own = await pool.query(
+        `SELECT group_id FROM groups WHERE group_id = $1 AND owner_id = $2`,
+        [gid, user_id]
+      );
+      if (own.rows.length === 0) {
+        return res.status(400).json({
+          message: "That category does not belong to your account.",
+        });
+      }
+      resolvedGroupId = gid;
     }
 
     const itemResult = await pool.query(
@@ -673,13 +723,13 @@ app.post(
       `,
       [
         user_id,
-        group_id || null,
-        item_name,
-        product_url,
+        resolvedGroupId,
+        itemName,
+        productUrl,
         image_url ?? null,
         store ?? null,
-        current_price,
-        notes || null
+        priceNum,
+        notes || null,
       ]
     );
 
@@ -694,7 +744,7 @@ app.post(
       INSERT INTO price_history (item_id, price)
       VALUES ($1, $2)
       `,
-      [newItemId, current_price]
+      [newItemId, priceNum]
     );
 
     // STEP 6: Send success response back to frontend
@@ -704,12 +754,17 @@ app.post(
       item_id: newItemId
     });
 
-  } catch (error) {
-    // ERROR HANDLING
+  } catch (error: unknown) {
     console.error("Error saving item:", error);
-
+    const err = error as { code?: string };
+    if (err.code === "23503") {
+      return res.status(400).json({
+        message:
+          "Database rejected the save (bad category link). Pick a category you created, or leave category empty.",
+      });
+    }
     res.status(500).json({
-      message: "Failed to save item"
+      message: "Failed to save item",
     });
   }
   }

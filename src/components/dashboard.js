@@ -20,6 +20,9 @@ const Dashboard = () => {
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupColor, setNewGroupColor] = useState("#f59e0b");
   const [itemModalOpen, setItemModalOpen] = useState(false);
+  const [categorySelectKey, setCategorySelectKey] = useState(0);
+  const [itemFormError, setItemFormError] = useState("");
+  const [itemSaving, setItemSaving] = useState(false);
   const [newItem, setNewItem] = useState({
     item_name: "",
     product_url: "",
@@ -30,7 +33,6 @@ const Dashboard = () => {
     group_id: "",
   });
 
-  // On first paint: no token → send user to login; else pull profile + lists in parallel.
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -70,17 +72,24 @@ const Dashboard = () => {
     setCartItems(items);
   };
 
-  // POST /api/cart-items uses the logged-in user from the JWT (see server/index.ts).
   const handleAddItem = async () => {
-    const price = parseFloat(newItem.current_price, 10);
+    setItemFormError("");
+    const price = parseFloat(String(newItem.current_price), 10);
     if (!newItem.item_name.trim() || !newItem.product_url.trim()) {
-      setStatusMessage("Item name and product URL are required.");
+      setItemFormError("Item name and product URL are required.");
       return;
     }
     if (Number.isNaN(price) || price < 0) {
-      setStatusMessage("Enter a valid price (0 or more).");
+      setItemFormError("Enter a valid price (0 or more).");
       return;
     }
+    const gidRaw = newItem.group_id;
+    const parsedGid = gidRaw === "" ? null : parseInt(String(gidRaw), 10);
+    if (gidRaw !== "" && Number.isNaN(parsedGid)) {
+      setItemFormError("Pick a valid category or choose “No category”.");
+      return;
+    }
+    setItemSaving(true);
     try {
       const payload = {
         item_name: newItem.item_name.trim(),
@@ -89,8 +98,7 @@ const Dashboard = () => {
         image_url: newItem.image_url.trim() || null,
         store: newItem.store.trim() || null,
         notes: newItem.notes.trim() || null,
-        group_id:
-          newItem.group_id === "" ? null : parseInt(newItem.group_id, 10),
+        group_id: parsedGid,
       };
       await apiRequest("/api/cart-items", {
         method: "POST",
@@ -109,7 +117,13 @@ const Dashboard = () => {
       setStatusMessage("Item added.");
       await reloadItems();
     } catch (error) {
-      setStatusMessage(error.message || "Failed to add item");
+      const msg =
+        error?.message ||
+        "Could not save. Try logging out and back in if your session expired.";
+      setItemFormError(msg);
+      setStatusMessage(msg);
+    } finally {
+      setItemSaving(false);
     }
   };
 
@@ -125,6 +139,10 @@ const Dashboard = () => {
         }),
       });
       setGroups((prev) => [...prev, result.group]);
+      setNewItem((s) => ({
+        ...s,
+        group_id: String(result.group.group_id),
+      }));
       setNewGroupName("");
       setNewGroupColor("#f59e0b");
       setIsModalOpen(false);
@@ -164,9 +182,13 @@ const Dashboard = () => {
             {groups.length > 0 ? (
               groups.map((group) => (
                 <div key={group.group_id} className="wishlist-card">
-                  <div className="wishlist-img-placeholder" style={{ backgroundColor: group.color || "#ddd" }} />
-                  <div className="wishlist-card-footer">
+                  <div
+                    className="wishlist-card-swatch"
+                    style={{ backgroundColor: group.color || "#94a3b8" }}
+                  >
                     <span className="wishlist-card-name">{group.group_name}</span>
+                  </div>
+                  <div className="wishlist-card-footer">
                     <span className="wishlist-item-count">
                       {cartItems.filter((item) => item.group_id === group.group_id).length} items
                     </span>
@@ -185,7 +207,19 @@ const Dashboard = () => {
             <button
               type="button"
               className="add-item-btn"
-              onClick={() => setItemModalOpen(true)}
+              onClick={() => {
+                setItemFormError("");
+                setNewItem({
+                  item_name: "",
+                  product_url: "",
+                  image_url: "",
+                  store: "",
+                  current_price: "0",
+                  notes: "",
+                  group_id: "",
+                });
+                setItemModalOpen(true);
+              }}
             >
               + Add item
             </button>
@@ -194,7 +228,11 @@ const Dashboard = () => {
             {cartItems.length > 0 ? (
               cartItems.slice(0, 8).map((item) => (
                 <div key={item.item_id} className="cart-placeholder">
-                  {item.image_url ? <img src={item.image_url} alt={item.item_name} className="item-image" /> : item.item_name}
+                  {item.image_url ? (
+                    <img src={item.image_url} alt={item.item_name} className="item-image" />
+                  ) : (
+                    item.item_name
+                  )}
                 </div>
               ))
             ) : (
@@ -207,22 +245,23 @@ const Dashboard = () => {
           <div className="modal-overlay">
             <div className="modal-content modal-wide">
               <h3>Add wishlist item</h3>
+              {itemFormError && (
+                <p className="modal-error" role="alert">
+                  {itemFormError}
+                </p>
+              )}
               <label className="modal-label">Name</label>
               <input
                 type="text"
                 value={newItem.item_name}
-                onChange={(e) =>
-                  setNewItem((s) => ({ ...s, item_name: e.target.value }))
-                }
+                onChange={(e) => setNewItem((s) => ({ ...s, item_name: e.target.value }))}
                 placeholder="Product name"
               />
               <label className="modal-label">Product URL</label>
               <input
-                type="url"
+                type="text"
                 value={newItem.product_url}
-                onChange={(e) =>
-                  setNewItem((s) => ({ ...s, product_url: e.target.value }))
-                }
+                onChange={(e) => setNewItem((s) => ({ ...s, product_url: e.target.value }))}
                 placeholder="https://..."
               />
               <label className="modal-label">Price</label>
@@ -231,34 +270,35 @@ const Dashboard = () => {
                 min="0"
                 step="0.01"
                 value={newItem.current_price}
-                onChange={(e) =>
-                  setNewItem((s) => ({ ...s, current_price: e.target.value }))
-                }
+                onChange={(e) => setNewItem((s) => ({ ...s, current_price: e.target.value }))}
               />
               <label className="modal-label">Image URL (optional)</label>
               <input
-                type="url"
+                type="text"
                 value={newItem.image_url}
-                onChange={(e) =>
-                  setNewItem((s) => ({ ...s, image_url: e.target.value }))
-                }
+                onChange={(e) => setNewItem((s) => ({ ...s, image_url: e.target.value }))}
                 placeholder="https://...jpg"
               />
               <label className="modal-label">Store (optional)</label>
               <input
                 type="text"
                 value={newItem.store}
-                onChange={(e) =>
-                  setNewItem((s) => ({ ...s, store: e.target.value }))
-                }
+                onChange={(e) => setNewItem((s) => ({ ...s, store: e.target.value }))}
                 placeholder="Amazon, Nike..."
               />
               <label className="modal-label">Category (optional)</label>
               <select
+                key={categorySelectKey}
                 value={newItem.group_id}
-                onChange={(e) =>
-                  setNewItem((s) => ({ ...s, group_id: e.target.value }))
-                }
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "__new__") {
+                    setCategorySelectKey((k) => k + 1);
+                    setIsModalOpen(true);
+                    return;
+                  }
+                  setNewItem((s) => ({ ...s, group_id: v }));
+                }}
               >
                 <option value="">No category</option>
                 {groups.map((g) => (
@@ -266,26 +306,21 @@ const Dashboard = () => {
                     {g.group_name}
                   </option>
                 ))}
+                <option value="__new__">+ Add new category…</option>
               </select>
               <label className="modal-label">Notes (optional)</label>
               <textarea
                 rows={2}
                 value={newItem.notes}
-                onChange={(e) =>
-                  setNewItem((s) => ({ ...s, notes: e.target.value }))
-                }
+                onChange={(e) => setNewItem((s) => ({ ...s, notes: e.target.value }))}
                 placeholder="Sizing, quality, etc."
               />
               <div className="modal-actions">
-                <button
-                  type="button"
-                  className="cancel-btn"
-                  onClick={() => setItemModalOpen(false)}
-                >
+                <button type="button" className="cancel-btn" onClick={() => setItemModalOpen(false)}>
                   Cancel
                 </button>
-                <button type="button" className="save-btn" onClick={handleAddItem}>
-                  Save item
+                <button type="button" className="save-btn" onClick={handleAddItem} disabled={itemSaving}>
+                  {itemSaving ? "Saving…" : "Save item"}
                 </button>
               </div>
             </div>
@@ -304,8 +339,12 @@ const Dashboard = () => {
               />
               <input type="color" value={newGroupColor} onChange={(e) => setNewGroupColor(e.target.value)} />
               <div className="modal-actions">
-                <button onClick={() => setIsModalOpen(false)} className="cancel-btn">Cancel</button>
-                <button onClick={handleSaveGroup} className="save-btn">Create</button>
+                <button onClick={() => setIsModalOpen(false)} className="cancel-btn">
+                  Cancel
+                </button>
+                <button onClick={handleSaveGroup} className="save-btn">
+                  Create
+                </button>
               </div>
             </div>
           </div>

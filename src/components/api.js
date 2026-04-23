@@ -30,7 +30,11 @@ export async function apiRequest(path, options = {}) {
   }
 
   if (!response.ok) {
-    throw new Error(data?.message || "Request failed");
+    const msg =
+      (data && data.message) ||
+      (typeof data === "string" ? data : null) ||
+      `Request failed (HTTP ${response.status})`;
+    throw new Error(msg);
   }
 
   return data;

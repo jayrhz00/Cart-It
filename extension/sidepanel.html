@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        display: flex;
+        font-family: system-ui, sans-serif;
+        min-height: 100%;
+        background: #faf8f5;
+      }
+      .edge-strip {
+        width: 12px;
+        flex-shrink: 0;
+        background: repeating-linear-gradient(
+          -45deg,
+          #ea580c,
+          #ea580c 7px,
+          #fecdd3 7px,
+          #fecdd3 14px
+        );
+        box-shadow: inset -2px 0 6px rgba(0, 0, 0, 0.08);
+      }
+      .panel-inner {
+        flex: 1;
+        min-width: 0;
+        padding: 14px 16px 20px;
+        max-width: 420px;
+      }
+      .popup-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+      }
+      .popup-header img {
+        width: 36px;
+        height: 36px;
+        object-fit: contain;
+        border-radius: 8px;
+      }
+      .popup-header h3 {
+        margin: 0;
+        font-size: 1.15rem;
+      }
+      label {
+        display: block;
+        font-size: 11px;
+        margin-top: 12px;
+        color: #444;
+        font-weight: 600;
+      }
+      input,
+      textarea,
+      select {
+        width: 100%;
+        padding: 8px 10px;
+        margin-top: 4px;
+        font-size: 13px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        font-family: inherit;
+      }
+      textarea {
+        min-height: 72px;
+        resize: vertical;
+      }
+      .row-btns {
+        display: flex;
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .row-btns button {
+        flex: 1;
+        margin-top: 0;
+      }
+      button {
+        margin-top: 14px;
+        width: 100%;
+        padding: 12px;
+        background: #db8046;
+        color: #fff;
+        border: 0;
+        border-radius: 10px;
+        font-weight: 700;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #e2e8f0;
+        color: #1e293b;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      #status {
+        margin-top: 12px;
+        font-size: 12px;
+        line-height: 1.4;
+        word-break: break-word;
+      }
+      .ok {
+        color: #166534;
+      }
+      .err {
+        color: #991b1b;
+      }
+      #authStatus {
+        font-size: 11px;
+        line-height: 1.4;
+        margin: 0 0 8px;
+      }
+      details {
+        margin-top: 12px;
+      }
+      summary {
+        font-size: 11px;
+        color: #64748b;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="edge-strip" aria-hidden="true"></div>
+    <div class="panel-inner">
+      <div class="popup-header">
+        <img src="icon.png" width="36" height="36" alt="" />
+        <h3>cart-It</h3>
+      </div>
+      <p id="authStatus" class="hint"></p>
+      <div class="row-btns">
+        <button type="button" class="secondary" id="refreshBtn">Use current tab</button>
+      </div>
+      <label for="productUrl">Product page URL</label>
+      <input id="productUrl" type="text" placeholder="https://…" autocomplete="off" />
+      <label for="category">Category</label>
+      <select id="category">
+        <option value="">No category</option>
+      </select>
+      <label for="notes">Notes (optional)</label>
+      <textarea id="notes" placeholder="Sizing, color, reminders…"></textarea>
+      <button type="button" id="saveBtn">Save to wishlist</button>
+      <div id="status"></div>
+      <details>
+        <summary>Advanced — API base URL</summary>
+        <label for="apiBase">API (Express)</label>
+        <input id="apiBase" type="text" placeholder="http://127.0.0.1:5001" autocomplete="off" />
+      </details>
+    </div>
+    <script src="panel.js"></script>
+  </body>
+</html>
