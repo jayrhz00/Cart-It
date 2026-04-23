@@ -6,20 +6,8 @@
   /* Main Layout */
   .dashboard-container { @apply flex min-h-screen bg-[#4A103D] text-white; }
 
-  /* Sidebar */
-  .dash-sidebar { @apply w-64 bg-white text-black p-8 flex flex-col justify-between; }
-  .sidebar-logo { @apply h-24 w-auto object-contain mb-8; }
-  .sidebar-nav-item { @apply flex items-center gap-2 cursor-pointer hover:text-orange-500 transition-colors; }
-  
-  /* Extension Card Style */
-  .extension-card { @apply bg-orange-50 p-4 rounded-2xl border border-orange-100 mt-8 mb-4 text-center; }
-  .extension-title { @apply font-bold text-sm mb-2 text-gray-800; }
-  .extension-btn { 
-    @apply w-full flex flex-row items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold 
-    bg-[#DB8046] text-white transition-all duration-200 
-    hover:bg-[#4A103D] hover:text-white whitespace-nowrap; 
-  }
-  .logout-btn { @apply flex items-center gap-2 text-red-500 font-semibold mt-auto; }
+  /* Item Card Style */
+  .cart-grid { @apply grid grid-cols-4 gap-4; }
 
   /* Main Area */
   .dash-main { @apply flex-1 p-12; }
@@ -27,7 +15,7 @@
 
   /* Wishlist Section */
   .wishlist-section { @apply space-y-6 mb-12; }
-  .wishlist-title { @apply text-2xl font-bold italic; }
+  .dash-wishlist-title { @apply text-2xl font-bold italic text-white; }
   .wishlist-grid { @apply grid grid-cols-5 gap-6; }
   
   .create-wishlist-btn { @apply h-48 bg-[#DB8046] p-6 rounded-[40px] flex flex-col items-center justify-center space-y-3 transition-transform hover:scale-105; }
@@ -62,4 +50,6 @@
   .box-placeholder { @apply h-20 bg-white/20 rounded-xl; }
   .cart-grid { @apply grid grid-cols-4 gap-4; }
   .cart-placeholder { @apply h-16 bg-white/20 rounded-lg; }
+  .cart-item-card { @apply bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-1; }
+
 }
