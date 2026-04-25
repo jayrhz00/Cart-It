@@ -7,6 +7,15 @@ function getPageData() {
     document.querySelector('meta[property="og:image"]')?.content ||
     document.querySelector('meta[name="twitter:image"]')?.content ||
     "";
+  const parsePriceText = (raw) => {
+    if (!raw) return null;
+    const cleaned = String(raw).replace(/,/g, "");
+    const match = cleaned.match(/([0-9]+(?:\.[0-9]{1,2})?)/);
+    if (!match) return null;
+    const parsed = Number(match[1]);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+  };
+
   let price = null;
   const jsonLd = document.querySelectorAll('script[type="application/ld+json"]');
   for (const node of jsonLd) {
@@ -28,6 +37,29 @@ function getPageData() {
       /* ignore */
     }
   }
+  if (price == null) {
+    const candidates = Array.from(
+      document.querySelectorAll(
+        [
+          '[itemprop="price"]',
+          '[data-testid*="price"]',
+          '[class*="price"]',
+          '[id*="price"]',
+          'meta[property="product:price:amount"]',
+          'meta[itemprop="price"]',
+        ].join(",")
+      )
+    );
+    for (const el of candidates) {
+      const content = el.getAttribute?.("content");
+      const text = content || el.textContent || "";
+      const parsed = parsePriceText(text);
+      if (parsed != null) {
+        price = parsed;
+        break;
+      }
+    }
+  }
   const host = location.hostname.replace(/^www\./, "");
   return {
     item_name: document.title || "Untitled page",
@@ -41,6 +73,7 @@ function getPageData() {
 let lastCapture = null;
 let authRejected = false;
 let cachedGroups = [];
+let currentUserLabel = "";
 
 function truncate(s, max) {
   const t = String(s || "");
@@ -72,10 +105,8 @@ function setTabHint(text) {
 
 async function resolveJwt() {
   if (authRejected) return "";
-  let { jwt } = await chrome.storage.local.get(["jwt"]);
-  if (isLikelyJwt(jwt)) return jwt;
   await syncTokenFromOpenTabs();
-  ({ jwt } = await chrome.storage.local.get(["jwt"]));
+  const { jwt } = await chrome.storage.local.get(["jwt"]);
   return isLikelyJwt(jwt) ? jwt : "";
 }
 
@@ -84,8 +115,9 @@ async function setAuthLine() {
   if (!el) return;
   const jwt = await resolveJwt();
   const ok = !!jwt;
+  const who = currentUserLabel ? ` as ${currentUserLabel}` : "";
   el.textContent = ok
-    ? "Signed in — token synced from your cart-It tab."
+    ? `Signed in${who} — token synced from your cart-It tab.`
     : "Open cart-It (cart-it.pages.dev or localhost), log in, then reopen this panel.";
   el.style.color = ok ? "#166534" : "#92400e";
 }
@@ -95,7 +127,12 @@ function isLikelyJwt(token) {
 }
 
 function isCartItHost(hostname) {
-  return hostname === "cart-it.pages.dev" || hostname === "localhost" || hostname === "127.0.0.1";
+  return (
+    hostname === "cart-it.pages.dev" ||
+    hostname.endsWith(".cart-it.pages.dev") ||
+    hostname === "localhost" ||
+    hostname === "127.0.0.1"
+  );
 }
 
 /** Ask the service worker to copy JWT from any open cart-It tab into extension storage. */
@@ -180,6 +217,13 @@ async function refreshFromTab() {
       func: getPageData,
     });
     lastCapture = result;
+    const manualPriceEl = document.getElementById("manualPrice");
+    if (manualPriceEl) {
+      manualPriceEl.value =
+        result.current_price != null && Number(result.current_price) > 0
+          ? String(result.current_price)
+          : "";
+    }
     const title = (result.item_name || "").trim();
     setTabHint(title ? `Saving from this tab: ${truncate(title, 72)}` : "Saving from this tab.");
     setStatus("", true);
@@ -228,6 +272,17 @@ async function loadCategories() {
       return;
     }
     cachedGroups = Array.isArray(data) ? data : [];
+    try {
+      const meRes = await fetch(`${base}/api/me`, {
+        headers: { Authorization: `Bearer ${jwt}` },
+      });
+      const meData = await meRes.json().catch(() => null);
+      currentUserLabel = meRes.ok
+        ? String(meData?.user?.username || meData?.user?.email || "")
+        : "";
+    } catch {
+      currentUserLabel = "";
+    }
     renderCategoryOptions();
     if (prev && [...sel.options].some((o) => o.value === prev)) {
       sel.value = prev;
@@ -362,7 +417,11 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
       setStatus("Could not read a product title from this page. Try refreshing the product tab.", false);
       return;
     }
-    const rawPrice = parseFloat(String(cap && cap.current_price != null ? cap.current_price : "0"), 10);
+    const manualPriceRaw = document.getElementById("manualPrice")?.value?.trim() || "";
+    const sourcePrice = manualPriceRaw !== ""
+      ? manualPriceRaw
+      : String(cap && cap.current_price != null ? cap.current_price : "0");
+    const rawPrice = parseFloat(sourcePrice, 10);
     const safePrice = Number.isNaN(rawPrice) || rawPrice < 0 ? 0 : rawPrice;
 
     const body = {

@@ -180,7 +180,12 @@ const Dashboard = () => {
       setInviteEmail("");
       await reloadDashboardData();
     } catch (error) {
-      setInviteStatus(error.message || "Could not send invite.");
+      const msg = error.message || "Could not send invite.";
+      if (/404/.test(msg)) {
+        setInviteStatus("Invite API not available in backend yet. Redeploy latest backend and try again.");
+      } else {
+        setInviteStatus(msg);
+      }
     }
   };
 
@@ -343,19 +348,23 @@ const Dashboard = () => {
                   ? "Shared wishlist (invite collaborators by email below)."
                   : "Private wishlist (only you can see items)."}
               </span>
-              <div className="invite-row">
-                <input
-                  type="email"
-                  className="invite-input"
-                  placeholder="Invite collaborator by email"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                />
-                <button type="button" className="invite-btn" onClick={handleInviteMember}>
-                  Invite
-                </button>
-              </div>
-              {inviteStatus ? <span className="selected-controls-help">{inviteStatus}</span> : null}
+              {selectedGroup?.visibility === "Shared" && (
+                <>
+                  <div className="invite-row">
+                    <input
+                      type="email"
+                      className="invite-input"
+                      placeholder="Invite collaborator by email"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                    />
+                    <button type="button" className="invite-btn" onClick={handleInviteMember}>
+                      Invite
+                    </button>
+                  </div>
+                  {inviteStatus ? <span className="selected-controls-help">{inviteStatus}</span> : null}
+                </>
+              )}
             </div>
             {selectedItems.length > 0 ? (
               <div className="selected-items-grid">
