@@ -40,7 +40,7 @@ export interface IStorage
     getGroupsByOwner(owner_id: number): Promise<Group[]>;                              // Get all groups owned by one user 
     createGroup(group: InsertGroup): Promise<Group>;                                  // Create new group
     updateGroup(group_id: number, group: Partial<Group>): Promise<Group> | undefined;  // Updates group name or color 
-    deleteGroup(group_id: number): Promise<boolean>;                                   // True --> Group exists and can be deleted. False --> Group not found 
+    deleteGroup(group_id: number, owner_id: number): Promise<boolean>;                // Deletes only if group belongs to owner
 
     // ---- GROUP MEMBER OPERATIONS ----
     getGroupMembers(group_id: number): Promise<GroupMember[]>;                        // Returns a list of all members in a shared group
@@ -213,8 +213,12 @@ export class MemStorage implements IStorage
         return updatedGroup;
     }
 
-    async deleteGroup(group_id: number): Promise<boolean>
+    async deleteGroup(group_id: number, owner_id: number): Promise<boolean>
     {
+        const g = this.groups.get(group_id);
+        if (!g || g.owner_id !== owner_id) {
+            return false;
+        }
         return this.groups.delete(group_id);
     }
 
@@ -542,7 +546,7 @@ async createGroup(group: InsertGroup): Promise<Group>
         [
             group.owner_id,                   // which user owns this group
             group.group_name,                // group name (ex: "Clothing")
-            group.color ?? null,            // color (or null if not provided)
+            "#6B7280",                       // temporarily disable color coding
             group.visibility ?? "Private"  // default to Private
         ]
     );
@@ -552,16 +556,14 @@ async createGroup(group: InsertGroup): Promise<Group>
 }
 
 
-// Delete a group
-async deleteGroup(group_id: number): Promise<boolean>
+// Delete a group (only when owned by the given user)
+async deleteGroup(group_id: number, owner_id: number): Promise<boolean>
 {
-    // Delete group from PostgreSQL
     const result = await pool.query(
-        `DELETE FROM groups WHERE group_id = $1`,
-        [group_id]
+        `DELETE FROM groups WHERE group_id = $1 AND owner_id = $2`,
+        [group_id, owner_id]
     );
 
-    // rowCount tells us if something was actually deleted
     return (result.rowCount ?? 0) > 0;
 }
 
