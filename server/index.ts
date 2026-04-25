@@ -389,6 +389,28 @@ app.get("/api/groups", authenticateToken, async (req: AuthRequest, res: Response
   }
 });
 
+// GET one group by id (must belong to the logged-in user)
+app.get("/api/groups/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const group_id = Number(req.params.id);
+    const owner_id = req.user!.userId;
+    if (isNaN(group_id)) {
+      return res.status(400).json({ message: "Invalid group ID" });
+    }
+    const result = await pool.query(
+      `SELECT * FROM groups WHERE group_id = $1 AND owner_id = $2`,
+      [group_id, owner_id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+    return res.status(200).json(result.rows[0]);
+  } catch (error) {
+    console.error("Get group failed:", error);
+    return res.status(500).json({ message: "Failed to fetch category" });
+  }
+});
+
 // CREATE a new group for a user thats logged in 
 app.post(
   "/api/groups",
@@ -515,11 +537,12 @@ app.delete(
       }
 
       // Delete from database
-      const deleted = await storage.deleteGroup(group_id);
+      const owner_id = req.user!.userId;
+      const deleted = await storage.deleteGroup(group_id, owner_id);
 
       if (!deleted) {
         return res.status(404).json({
-          message: "Group not found",
+          message: "Group not found or you do not own it",
         });
       }
 
@@ -557,14 +580,37 @@ app.get("/api/users", authenticateToken, async (req: AuthRequest, res: Response)
 app.get("/api/cart-items", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const owner_id = req.user!.userId;
+    const rawQ = req.query.group_id;
+    const groupIdStr =
+      typeof rawQ === "string" ? rawQ : Array.isArray(rawQ) ? rawQ[0] : undefined;
+
+    const params: number[] = [owner_id];
+    let filter = "";
+
+    if (groupIdStr !== undefined && groupIdStr !== "") {
+      const gid = Number(groupIdStr);
+      if (isNaN(gid)) {
+        return res.status(400).json({ message: "Invalid group_id query" });
+      }
+      const own = await pool.query(
+        `SELECT 1 FROM groups WHERE group_id = $1 AND owner_id = $2`,
+        [gid, owner_id]
+      );
+      if (own.rows.length === 0) {
+        return res.status(404).json({ message: "Category not found" });
+      }
+      params.push(gid);
+      filter = ` AND group_id = $${params.length}`;
+    }
+
     const result = await pool.query(
       `
       SELECT *
       FROM cart_items
-      WHERE user_id = $1
-      ORDER BY item_id ASC
+      WHERE user_id = $1${filter}
+      ORDER BY item_id DESC
       `,
-      [owner_id]
+      params
     );
     res.status(200).json(result.rows);
   } catch (error) {
@@ -639,6 +685,57 @@ app.get("/api/price-history", authenticateToken, async (req: AuthRequest, res: R
   }
 });
 
+// Spending / wishlist totals for analytics page
+app.get("/api/analytics/spending", authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const owner_id = req.user!.userId;
+    const summary = await pool.query(
+      `
+      SELECT
+        COUNT(*)::int AS total_items,
+        COUNT(*) FILTER (WHERE is_purchased = true)::int AS purchased_count,
+        COUNT(*) FILTER (WHERE is_purchased = false)::int AS open_count,
+        COALESCE(SUM(purchase_price) FILTER (WHERE is_purchased = true), 0)::numeric AS total_spent,
+        COALESCE(SUM(current_price) FILTER (WHERE is_purchased = false), 0)::numeric AS wishlist_value
+      FROM cart_items
+      WHERE user_id = $1
+      `,
+      [owner_id]
+    );
+
+    const byStore = await pool.query(
+      `
+      SELECT
+        COALESCE(NULLIF(TRIM(store), ''), 'Unknown') AS store,
+        COUNT(*)::int AS item_count,
+        COALESCE(
+          SUM(
+            CASE
+              WHEN is_purchased = true THEN COALESCE(purchase_price, current_price, 0)
+              ELSE COALESCE(current_price, 0)
+            END
+          ),
+          0
+        )::numeric AS amount
+      FROM cart_items
+      WHERE user_id = $1
+      GROUP BY 1
+      ORDER BY amount DESC NULLS LAST
+      LIMIT 15
+      `,
+      [owner_id]
+    );
+
+    return res.status(200).json({
+      summary: summary.rows[0],
+      by_store: byStore.rows,
+    });
+  } catch (error) {
+    console.error("Analytics spending failed:", error);
+    return res.status(500).json({ message: "Failed to load spending analytics" });
+  }
+});
+
 app.get("/api/group-members", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const owner_id = req.user!.userId;
@@ -678,18 +775,24 @@ app.post(
     } = req.body;
 
     const itemName = typeof item_name === "string" ? item_name.trim() : "";
-    const productUrl = typeof product_url === "string" ? product_url.trim() : "";
+    const productUrl = typeof product_url === "string" && product_url.trim() !== ""
+    ? product_url.trim()
+    : (req.headers.referer || "");
+
+    console.log("BODY FROM EXTENSION:", req.body);
+    console.log("PRODUCT URL:", productUrl);
+
     const priceRaw =
       current_price === undefined || current_price === null
         ? 0
         : Number(current_price);
     const priceNum = Number.isFinite(priceRaw) ? priceRaw : NaN;
 
-    if (!itemName || !productUrl) {
-      return res.status(400).json({
-        message: "Missing required fields (item_name, product_url)",
-      });
-    }
+    if (!itemName) {
+  return res.status(400).json({
+    message: "Missing required field: item_name",
+  });
+}
     if (Number.isNaN(priceNum) || priceNum < 0) {
       return res.status(400).json({
         message: "current_price must be a non-negative number",
@@ -1045,15 +1148,18 @@ app.patch(
 );
 
 // START SERVER
-async function startServer(): Promise<void> {
-  await initializeDatabase();
+async function startServer() {
+  try {
+    await initializeDatabase();
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
-  });
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://0.0.0.0:${PORT}`);
+    });
+
+  } catch (error) {
+    console.error("Server startup failed:", error);
+  }
 }
 
-startServer().catch((error) => {
-  console.error("Server startup failed:", error);
-  process.exit(1);
-});
+startServer();
+
