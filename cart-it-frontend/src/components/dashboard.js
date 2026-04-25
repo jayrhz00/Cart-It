@@ -21,6 +21,7 @@ const Dashboard = () => {
   
   // State for wishlists - initialized as empty array 
   const [wishlists, setWishlists] = useState([]); 
+  const [cartItems, setCartItems] = useState([]);
 
   // State for modals (creating new wishlist)
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -38,9 +39,12 @@ const Dashboard = () => {
       setUser(user);
         
         // Fetch wishlists from database
-      apiRequest('/api/groups')
-        .then(data => setWishlists(data))
-        .catch(err => console.error("Error fetching wishlists:", err));
+      Promise.all([apiRequest('/api/groups'), apiRequest('/api/cart-items')])
+        .then(([groupData, itemData]) => {
+          setWishlists(groupData);
+          setCartItems(itemData);
+        })
+        .catch(err => console.error("Error fetching dashboard data:", err));
     }
   }, [navigate]);
 
@@ -117,15 +121,20 @@ const Dashboard = () => {
 
             {/* Display wishlists or a placeholder if none exist */}
             {wishlists.length > 0 ? (
-              wishlists.map((list) => (
-                <div key={list.id} className="wishlist-card">
+              wishlists.map((list) => {
+                const listId = list.group_id ?? list.id;
+                const listName = list.group_name ?? list.name ?? "Untitled";
+                const itemCount = cartItems.filter((item) => item.group_id === listId).length;
+                return (
+                <div key={listId} className="wishlist-card">
                   <div className="wishlist-img-placeholder"></div>
                   <div className="wishlist-card-footer">
-                    <span className="wishlist-card-name">{list.name}</span>
-                    <span className="wishlist-item-count">{list.items} items</span>
+                    <span className="wishlist-card-name">{listName}</span>
+                    <span className="wishlist-item-count">{itemCount} items</span>
                   </div>
                 </div>
-              ))
+              );
+              })
             ) : (
               <div className="empty-state">
                 No wishlists yet ... start shopping!
