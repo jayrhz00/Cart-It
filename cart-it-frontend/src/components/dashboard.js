@@ -61,8 +61,7 @@ const Dashboard = () => {
         const response = await apiRequest('/api/groups', {
           method: 'POST',
           body: JSON.stringify({ 
-          owner_id: user.user_id, 
-          name: newWishlistName 
+          group_name: newWishlistName
         }),
         });
         const newWishlist = response.group || response;
@@ -71,7 +70,7 @@ const Dashboard = () => {
         setIsModalOpen(false);
       } catch (error) {
         console.error("Error creating wishlist:", error);
-        alert("Server error. Please try again later.");
+        alert(error.message || "Server error. Please try again later.");
       }
     }
   };
