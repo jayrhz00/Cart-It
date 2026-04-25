@@ -244,10 +244,11 @@ function renderCategoryOptions() {
   const scopeEl = document.getElementById("listScope");
   if (!sel) return;
   const prev = sel.value;
-  const scope = scopeEl?.value || "Private";
+  const scope = scopeEl?.value || "All";
   sel.innerHTML = '<option value="">No category</option>';
   const filtered = cachedGroups.filter((g) => {
     const visibility = String(g.visibility || "Private");
+    if (scope === "All") return true;
     return visibility === scope;
   });
   for (const g of filtered) {

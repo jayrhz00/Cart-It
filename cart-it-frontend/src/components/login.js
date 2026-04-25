@@ -8,10 +8,13 @@ const Login = () => {
   const [email, setEmail] = useState(''); // State for email input
   const [password, setPassword] = useState(''); // State for password input
   const [statusMessage, setStatusMessage] = useState(''); // State for status messages
+  const [isLoading, setIsLoading] = useState(false);
 
   // Handle form submission for login
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setStatusMessage('');
+    setIsLoading(true);
     try {
       const data = await apiRequest('/api/login', {
         method: 'POST',
@@ -23,6 +26,8 @@ const Login = () => {
     } catch (error) {
       console.error("Connection error:", error);
       setStatusMessage(error.message || "Could not connect to server");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -58,6 +63,7 @@ const Login = () => {
                   className="input-field"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  disabled={isLoading}
                   required 
                 />
               </div>
@@ -69,12 +75,13 @@ const Login = () => {
                   className="input-field"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  disabled={isLoading}
                   required 
                 />
               </div>
 
-              <button type="submit" className="btn-primary">
-                Log In
+              <button type="submit" className="btn-primary" disabled={isLoading}>
+                {isLoading ? "Logging in..." : "Log In"}
               </button>
             </form>
           </div>
