@@ -164,6 +164,84 @@ function parsePositivePrice(raw: unknown): number | null {
   return Number(num.toFixed(2));
 }
 
+function getFrontendBaseUrl(): string {
+  const raw = String(process.env.FRONTEND_URL || "https://cart-it.pages.dev").trim();
+  return raw.replace(/\/+$/, "");
+}
+
+async function sendGroupInviteEmail({
+  toEmail,
+  toName,
+  ownerName,
+  groupName,
+  inviteUrl,
+}: {
+  toEmail: string;
+  toName?: string;
+  ownerName: string;
+  groupName: string;
+  inviteUrl: string;
+}): Promise<{ sent: boolean; reason?: string }> {
+  const apiKey = String(process.env.RESEND_API_KEY || "").trim();
+  const fromEmail = String(process.env.RESEND_FROM_EMAIL || "").trim();
+
+  if (!apiKey || !fromEmail) {
+    return {
+      sent: false,
+      reason: "Invite email provider is not configured (RESEND_API_KEY/RESEND_FROM_EMAIL).",
+    };
+  }
+
+  const safeToName = toName || toEmail;
+  const safeOwner = ownerName || "A Cart-It user";
+  const safeGroup = groupName || "your wishlist";
+  const subject = `${safeOwner} invited you to collaborate on "${safeGroup}"`;
+  const html = `
+    <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111827">
+      <h2 style="margin-bottom:8px">You were invited to a Cart-It wishlist</h2>
+      <p style="margin-top:0">Hi ${safeToName},</p>
+      <p><strong>${safeOwner}</strong> invited you to collaborate on <strong>${safeGroup}</strong>.</p>
+      <p>
+        Open Cart-It to view and manage the shared wishlist:
+        <br />
+        <a href="${inviteUrl}" target="_blank" rel="noreferrer">${inviteUrl}</a>
+      </p>
+      <p style="color:#6b7280;font-size:13px">If this was not expected, you can ignore this email.</p>
+    </div>
+  `;
+
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: [toEmail],
+        subject,
+        html,
+      }),
+    });
+
+    if (!response.ok) {
+      const details = await response.text().catch(() => "");
+      return {
+        sent: false,
+        reason: `Email API failed (${response.status})${details ? `: ${details}` : ""}`,
+      };
+    }
+
+    return { sent: true };
+  } catch (error: any) {
+    return {
+      sent: false,
+      reason: error?.message || "Failed to contact invite email provider.",
+    };
+  }
+}
+
 function extractPriceFromJsonLdObject(node: any): number | null {
   if (!node || typeof node !== "object") return null;
   const offers = node.offers || node.aggregateOffer || null;
@@ -924,7 +1002,12 @@ app.post(
       }
 
       const ownedGroup = await pool.query(
-        `SELECT group_id, group_name, visibility FROM groups WHERE group_id = $1 AND owner_id = $2`,
+        `
+        SELECT g.group_id, g.group_name, g.visibility, u.username AS owner_username, u.email AS owner_email
+        FROM groups g
+        JOIN users u ON u.user_id = g.owner_id
+        WHERE g.group_id = $1 AND g.owner_id = $2
+        `,
         [group_id, owner_id]
       );
       if (ownedGroup.rows.length === 0) {
@@ -952,8 +1035,32 @@ app.post(
         await pool.query(`UPDATE groups SET visibility = 'Shared' WHERE group_id = $1`, [group_id]);
       }
 
+      await pool.query(
+        `
+        INSERT INTO notifications (user_id, item_id, message, is_read)
+        VALUES ($1, NULL, $2, false)
+        `,
+        [
+          invitedUser.user_id,
+          `You were added to shared wishlist "${ownedGroup.rows[0].group_name}"`,
+        ]
+      );
+
+      const inviteUrl = `${getFrontendBaseUrl()}/dashboard`;
+      const emailResult = await sendGroupInviteEmail({
+        toEmail: invitedUser.email,
+        toName: invitedUser.username || invitedUser.email,
+        ownerName: ownedGroup.rows[0].owner_username || ownedGroup.rows[0].owner_email || "A Cart-It user",
+        groupName: ownedGroup.rows[0].group_name || "Shared wishlist",
+        inviteUrl,
+      });
+
       return res.status(200).json({
-        message: "Invite sent successfully",
+        message: emailResult.sent
+          ? "Invite sent successfully"
+          : `Member added, but email was not sent: ${emailResult.reason}`,
+        email_sent: emailResult.sent,
+        email_error: emailResult.sent ? null : emailResult.reason,
         invited: {
           user_id: invitedUser.user_id,
           email: invitedUser.email,
