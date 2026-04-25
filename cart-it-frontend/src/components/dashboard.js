@@ -53,9 +53,6 @@ const Dashboard = () => {
   // Opens the create wishlist modal
   const handleSaveWishlist = async () => {
     if (newWishlistName.trim()) {
-      // Get current user info from local storage to associate wishlist with user ID
-      const user = JSON.parse(localStorage.getItem('user'));
-
       // Send new wishlist data to backend API
       try {
         const response = await apiRequest('/api/groups', {
