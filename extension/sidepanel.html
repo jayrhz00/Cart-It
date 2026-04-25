@@ -39,7 +39,7 @@
         display: flex;
         align-items: center;
         gap: 10px;
-        margin-bottom: 8px;
+        margin-bottom: 6px;
       }
       .popup-header img {
         width: 36px;
@@ -50,6 +50,18 @@
       .popup-header h3 {
         margin: 0;
         font-size: 1.15rem;
+      }
+      #authStatus {
+        font-size: 11px;
+        line-height: 1.4;
+        margin: 0 0 10px;
+      }
+      #tabHint {
+        font-size: 12px;
+        color: #64748b;
+        margin: 0 0 14px;
+        line-height: 1.35;
+        word-break: break-word;
       }
       label {
         display: block;
@@ -73,15 +85,6 @@
         min-height: 72px;
         resize: vertical;
       }
-      .row-btns {
-        display: flex;
-        gap: 8px;
-        margin-top: 14px;
-      }
-      .row-btns button {
-        flex: 1;
-        margin-top: 0;
-      }
       button {
         margin-top: 14px;
         width: 100%;
@@ -98,6 +101,17 @@
         background: #e2e8f0;
         color: #1e293b;
       }
+      button.link-btn {
+        margin-top: 8px;
+        width: auto;
+        padding: 0;
+        background: none;
+        color: #c2410c;
+        font-weight: 600;
+        font-size: 12px;
+        text-decoration: underline;
+        text-align: left;
+      }
       button:disabled {
         opacity: 0.6;
         cursor: not-allowed;
@@ -108,19 +122,95 @@
         line-height: 1.4;
         word-break: break-word;
       }
+      #viewWishlistLink {
+        display: inline-block;
+        margin-top: 8px;
+        font-size: 13px;
+        font-weight: 700;
+        color: #9a3412;
+        text-decoration: underline;
+      }
+      #viewWishlistLink[hidden] {
+        display: none !important;
+      }
       .ok {
         color: #166534;
       }
       .err {
         color: #991b1b;
       }
-      #authStatus {
+      .new-cat-wrap {
+        margin-top: 10px;
+        padding: 10px;
+        border-radius: 10px;
+        background: #fff;
+        border: 1px solid #e2e8f0;
+      }
+      .new-cat-wrap[hidden] {
+        display: none !important;
+      }
+      .new-cat-wrap label:first-of-type {
+        margin-top: 0;
+      }
+      .new-cat-wrap button#createCatBtn {
+        margin-top: 10px;
+      }
+      .color-field {
+        margin-top: 10px;
+      }
+      .color-field-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 700;
+        color: #9a3412;
+        margin: 0;
+      }
+      .color-field-help {
         font-size: 11px;
-        line-height: 1.4;
-        margin: 0 0 8px;
+        color: #b45309;
+        margin: 6px 0 10px;
+        line-height: 1.45;
+      }
+      .color-picker-card {
+        position: relative;
+        border-radius: 22px;
+        padding: 3px;
+        background: linear-gradient(145deg, #fed7aa, #fdba74, #fb923c);
+        box-shadow: 0 6px 18px rgba(234, 88, 12, 0.18), 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+      }
+      .color-picker-card-inner {
+        border-radius: 19px;
+        padding: 10px;
+        background: linear-gradient(180deg, #fffdfb 0%, #fff7ed 100%);
+        border: 1px solid rgba(255, 237, 213, 0.95);
+      }
+      input[type="color"]#newCatColor {
+        display: block;
+        width: 100%;
+        height: 52px;
+        padding: 0;
+        margin: 0;
+        border: 0;
+        border-radius: 14px;
+        cursor: pointer;
+        background: transparent;
+      }
+      input[type="color"]#newCatColor::-webkit-color-swatch-wrapper {
+        padding: 6px;
+      }
+      input[type="color"]#newCatColor::-webkit-color-swatch {
+        border-radius: 12px;
+        border: none;
+        box-shadow: 0 2px 8px rgba(124, 45, 18, 0.15);
+      }
+      input[type="color"]#newCatColor::-moz-color-swatch {
+        border-radius: 12px;
+        border: none;
       }
       details {
-        margin-top: 12px;
+        margin-top: 14px;
       }
       summary {
         font-size: 11px;
@@ -137,19 +227,51 @@
         <h3>cart-It</h3>
       </div>
       <p id="authStatus" class="hint"></p>
-      <div class="row-btns">
-        <button type="button" class="secondary" id="refreshBtn">Use current tab</button>
-      </div>
-      <label for="productUrl">Product page URL</label>
-      <input id="productUrl" type="text" placeholder="https://…" autocomplete="off" />
+      <p id="tabHint" aria-live="polite"></p>
+
+      <label for="listScope">Save to</label>
+      <select id="listScope">
+        <option value="Private">Private wishlist</option>
+        <option value="Shared">Shared wishlist</option>
+      </select>
+
       <label for="category">Category</label>
       <select id="category">
         <option value="">No category</option>
       </select>
+      <button type="button" id="toggleNewCat" class="link-btn">+ Create new category</button>
+      <div id="newCatWrap" class="new-cat-wrap" hidden>
+        <label for="newCatName">Name</label>
+        <input id="newCatName" type="text" placeholder="e.g. Holiday gifts" autocomplete="off" />
+        <div class="color-field">
+          <span class="color-field-label" id="newCatColorLabel">
+            <span aria-hidden="true">🎨</span> Pick a color for this category
+          </span>
+          <p class="color-field-help" id="newCatColorHelp">
+            Tap the swatch — a cute color wheel pops up. Warm oranges and soft pinks match Cart-It best.
+          </p>
+          <div class="color-picker-card" aria-hidden="false">
+            <div class="color-picker-card-inner">
+              <input
+                type="color"
+                id="newCatColor"
+                value="#f59e0b"
+                title="Choose category color"
+                aria-labelledby="newCatColorLabel"
+                aria-describedby="newCatColorHelp"
+              />
+            </div>
+          </div>
+        </div>
+        <button type="button" id="createCatBtn" class="secondary">Create category</button>
+      </div>
+
       <label for="notes">Notes (optional)</label>
       <textarea id="notes" placeholder="Sizing, color, reminders…"></textarea>
-      <button type="button" id="saveBtn">Save to wishlist</button>
+      <button type="button" id="saveBtn">Save item</button>
       <div id="status"></div>
+      <a id="viewWishlistLink" href="#" target="_blank" rel="noreferrer" hidden>See item in wishlist</a>
+
       <details>
         <summary>Advanced — API base URL</summary>
         <label for="apiBase">API (Express)</label>

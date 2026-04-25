@@ -62,6 +62,11 @@ interface UpdateGroupBody {
   visibility?: "Private" | "Shared";
 }
 
+interface InviteGroupMemberBody {
+  email: string;
+  role?: "Editor" | "Owner";
+}
+
 interface CreateCartItemBody {
   group_id?: number | null;
   item_name: string;
@@ -98,6 +103,7 @@ type AuthRequest<
 // EXPRESS APP SETUP
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
+const PRICE_CHECK_INTERVAL_MINUTES = Number(process.env.PRICE_CHECK_INTERVAL_MINUTES || 180);
 
 // Allows frontend to talk to backend
 app.use(cors());
@@ -149,6 +155,150 @@ function authenticateToken
     return res.status(403).json({
       message: "Invalid or expired token",
     });
+  }
+}
+
+function parsePositivePrice(raw: unknown): number | null {
+  const num = Number(raw);
+  if (!Number.isFinite(num) || num < 0) return null;
+  return Number(num.toFixed(2));
+}
+
+function extractPriceFromJsonLdObject(node: any): number | null {
+  if (!node || typeof node !== "object") return null;
+  const offers = node.offers || node.aggregateOffer || null;
+  if (offers) {
+    const direct = parsePositivePrice((offers as any).price);
+    if (direct != null) return direct;
+    const low = parsePositivePrice((offers as any).lowPrice);
+    if (low != null) return low;
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const nested = extractPriceFromJsonLdObject(child);
+      if (nested != null) return nested;
+    }
+  }
+  for (const value of Object.values(node)) {
+    if (value && typeof value === "object") {
+      const nested = extractPriceFromJsonLdObject(value);
+      if (nested != null) return nested;
+    }
+  }
+  return null;
+}
+
+function extractPriceFromHtml(html: string): number | null {
+  const metaPatterns = [
+    /property=["']product:price:amount["'][^>]*content=["']([0-9]+(?:\.[0-9]+)?)["']/i,
+    /name=["']price["'][^>]*content=["']([0-9]+(?:\.[0-9]+)?)["']/i,
+    /itemprop=["']price["'][^>]*content=["']([0-9]+(?:\.[0-9]+)?)["']/i,
+  ];
+  for (const re of metaPatterns) {
+    const m = html.match(re);
+    if (m?.[1]) {
+      const metaPrice = parsePositivePrice(m[1]);
+      if (metaPrice != null) return metaPrice;
+    }
+  }
+
+  const jsonLdBlocks = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
+  for (const block of jsonLdBlocks) {
+    const content = block
+      .replace(/^<script[^>]*>/i, "")
+      .replace(/<\/script>$/i, "")
+      .trim();
+    if (!content) continue;
+    try {
+      const parsed = JSON.parse(content);
+      const fromLd = extractPriceFromJsonLdObject(parsed);
+      if (fromLd != null) return fromLd;
+    } catch {
+      // Ignore malformed JSON-LD block
+    }
+  }
+
+  const genericPriceMatch = html.match(/"price"\s*:\s*"?([0-9]+(?:\.[0-9]+)?)"?/i);
+  if (genericPriceMatch?.[1]) {
+    const fallbackPrice = parsePositivePrice(genericPriceMatch[1]);
+    if (fallbackPrice != null) return fallbackPrice;
+  }
+  return null;
+}
+
+async function fetchCurrentPriceFromProductUrl(url: string): Promise<number | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml",
+      },
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    return extractPriceFromHtml(html);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function runPriceCheckCycle(): Promise<void> {
+  try {
+    const items = await pool.query(
+      `
+      SELECT item_id, user_id, item_name, product_url, current_price
+      FROM cart_items
+      WHERE is_purchased = false AND product_url IS NOT NULL
+      ORDER BY item_id ASC
+      `
+    );
+
+    for (const row of items.rows) {
+      const itemId = Number(row.item_id);
+      const userId = Number(row.user_id);
+      const itemName = String(row.item_name || "Item");
+      const productUrl = String(row.product_url || "").trim();
+      const previousPrice = Number(row.current_price || 0);
+
+      if (!productUrl) continue;
+      const latestPrice = await fetchCurrentPriceFromProductUrl(productUrl);
+      if (latestPrice == null) continue;
+
+      const changed = Math.abs(latestPrice - previousPrice) >= 0.01;
+      if (!changed) continue;
+
+      await pool.query(
+        `UPDATE cart_items SET current_price = $1 WHERE item_id = $2`,
+        [latestPrice, itemId]
+      );
+      await pool.query(
+        `INSERT INTO price_history (item_id, price) VALUES ($1, $2)`,
+        [itemId, latestPrice]
+      );
+
+      if (latestPrice < previousPrice) {
+        await pool.query(
+          `
+          INSERT INTO notifications (user_id, item_id, message, is_read)
+          VALUES ($1, $2, $3, false)
+          `,
+          [
+            userId,
+            itemId,
+            `Price dropped for ${itemName}: $${previousPrice.toFixed(2)} -> $${latestPrice.toFixed(2)}`,
+          ]
+        );
+      }
+    }
+  } catch (error) {
+    console.error("Price check cycle failed:", error);
   }
 }
 
@@ -756,6 +906,67 @@ app.get("/api/group-members", authenticateToken, async (req: AuthRequest, res: R
   }
 });
 
+app.post(
+  "/api/groups/:id/invite",
+  authenticateToken,
+  async (req: AuthRequest<InviteGroupMemberBody, { id: string }>, res: Response) => {
+    try {
+      const group_id = Number(req.params.id);
+      const owner_id = req.user!.userId;
+      const email = String(req.body?.email || "").trim().toLowerCase();
+      const role = req.body?.role === "Owner" ? "Owner" : "Editor";
+
+      if (isNaN(group_id)) {
+        return res.status(400).json({ message: "Invalid group ID" });
+      }
+      if (!email) {
+        return res.status(400).json({ message: "Invite email is required" });
+      }
+
+      const ownedGroup = await pool.query(
+        `SELECT group_id, group_name, visibility FROM groups WHERE group_id = $1 AND owner_id = $2`,
+        [group_id, owner_id]
+      );
+      if (ownedGroup.rows.length === 0) {
+        return res.status(404).json({ message: "Group not found or you do not own it" });
+      }
+
+      const invitedUser = await storage.getUserByEmail(email);
+      if (!invitedUser) {
+        return res.status(404).json({ message: "No Cart-It user found for that email yet." });
+      }
+      if (invitedUser.user_id === owner_id) {
+        return res.status(400).json({ message: "You already own this wishlist." });
+      }
+
+      await pool.query(
+        `
+        INSERT INTO group_members (group_id, user_id, role)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (group_id, user_id) DO UPDATE SET role = EXCLUDED.role
+        `,
+        [group_id, invitedUser.user_id, role]
+      );
+
+      if (ownedGroup.rows[0].visibility !== "Shared") {
+        await pool.query(`UPDATE groups SET visibility = 'Shared' WHERE group_id = $1`, [group_id]);
+      }
+
+      return res.status(200).json({
+        message: "Invite sent successfully",
+        invited: {
+          user_id: invitedUser.user_id,
+          email: invitedUser.email,
+          username: invitedUser.username,
+        },
+      });
+    } catch (error) {
+      console.error("Invite group member failed:", error);
+      return res.status(500).json({ message: "Failed to invite member" });
+    }
+  }
+);
+
 // Create a wishlist row. User comes from JWT (req.user), NOT from the request body — safer.
 app.post(
   "/api/cart-items",
@@ -955,7 +1166,7 @@ app.patch(
 
       const ownerCheck = await pool.query(
         `
-        SELECT user_id
+        SELECT user_id, current_price, item_name
         FROM cart_items
         WHERE item_id = $1
         `,
@@ -970,6 +1181,9 @@ app.patch(
         return res.status(403).json({ message: "You cannot update this item" });
       }
 
+      const previousPrice = Number(ownerCheck.rows[0].current_price ?? 0);
+      const previousItemName = String(ownerCheck.rows[0].item_name || "Item");
+
       values.push(item_id);
       const result = await pool.query(
         `
@@ -982,6 +1196,24 @@ app.patch(
 
       if (result.rows.length === 0) {
         return res.status(404).json({ message: "Item not found" });
+      }
+
+      const nextPrice =
+        current_price !== undefined && Number.isFinite(Number(current_price))
+          ? Number(current_price)
+          : previousPrice;
+      if (current_price !== undefined && nextPrice < previousPrice) {
+        await pool.query(
+          `
+          INSERT INTO notifications (user_id, item_id, message, is_read)
+          VALUES ($1, $2, $3, false)
+          `,
+          [
+            owner_id,
+            item_id,
+            `Price dropped for ${previousItemName}: $${previousPrice.toFixed(2)} -> $${nextPrice.toFixed(2)}`,
+          ]
+        ).catch(() => {});
       }
 
       return res.status(200).json({
@@ -1155,6 +1387,15 @@ async function startServer() {
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on http://0.0.0.0:${PORT}`);
     });
+
+    const intervalMs = Math.max(5, PRICE_CHECK_INTERVAL_MINUTES) * 60 * 1000;
+    console.log(`Price checker enabled: every ${Math.max(5, PRICE_CHECK_INTERVAL_MINUTES)} minute(s)`);
+    setTimeout(() => {
+      runPriceCheckCycle().catch(() => {});
+    }, 15000);
+    setInterval(() => {
+      runPriceCheckCycle().catch(() => {});
+    }, intervalMs);
 
   } catch (error) {
     console.error("Server startup failed:", error);

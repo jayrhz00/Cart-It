@@ -40,6 +40,7 @@ function getPageData() {
 
 let lastCapture = null;
 let authRejected = false;
+let cachedGroups = [];
 
 function truncate(s, max) {
   const t = String(s || "");
@@ -50,6 +51,18 @@ function setStatus(text, ok) {
   const el = document.getElementById("status");
   el.textContent = text;
   el.className = ok ? "ok" : "err";
+}
+
+function setWishlistLink(href) {
+  const el = document.getElementById("viewWishlistLink");
+  if (!el) return;
+  if (!href) {
+    el.hidden = true;
+    el.removeAttribute("href");
+    return;
+  }
+  el.href = href;
+  el.hidden = false;
 }
 
 function setTabHint(text) {
@@ -129,7 +142,8 @@ async function syncTokenFromOpenTabs() {
       const token = typeof data.token === "string" ? data.token.trim() : "";
       const clean = token.startsWith("Bearer ") ? token.slice(7).trim() : token;
       if (isLikelyJwt(clean)) {
-        await chrome.storage.local.set({ jwt: clean });
+        const origin = new URL(tab.url).origin;
+        await chrome.storage.local.set({ jwt: clean, jwt_origin: origin });
         return true;
       }
     } catch {
@@ -137,6 +151,14 @@ async function syncTokenFromOpenTabs() {
     }
   }
   return false;
+}
+
+async function resolveDashboardUrl() {
+  const { jwt_origin } = await chrome.storage.local.get(["jwt_origin"]);
+  if (typeof jwt_origin === "string" && jwt_origin.trim()) {
+    return `${jwt_origin.replace(/\/$/, "")}/dashboard`;
+  }
+  return "https://cart-it.pages.dev/dashboard";
 }
 
 async function apiBase() {
@@ -205,15 +227,8 @@ async function loadCategories() {
       setAuthLine();
       return;
     }
-    const groups = Array.isArray(data) ? data : [];
-    for (const g of groups) {
-      const id = g.group_id;
-      const name = g.group_name || `Category ${id}`;
-      const opt = document.createElement("option");
-      opt.value = String(id);
-      opt.textContent = name;
-      sel.appendChild(opt);
-    }
+    cachedGroups = Array.isArray(data) ? data : [];
+    renderCategoryOptions();
     if (prev && [...sel.options].some((o) => o.value === prev)) {
       sel.value = prev;
     }
@@ -222,6 +237,30 @@ async function loadCategories() {
     setStatus(e.message || "Network error loading categories.", false);
   }
   setAuthLine();
+}
+
+function renderCategoryOptions() {
+  const sel = document.getElementById("category");
+  const scopeEl = document.getElementById("listScope");
+  if (!sel) return;
+  const prev = sel.value;
+  const scope = scopeEl?.value || "Private";
+  sel.innerHTML = '<option value="">No category</option>';
+  const filtered = cachedGroups.filter((g) => {
+    const visibility = String(g.visibility || "Private");
+    return visibility === scope;
+  });
+  for (const g of filtered) {
+    const id = g.group_id;
+    const name = g.group_name || `Category ${id}`;
+    const opt = document.createElement("option");
+    opt.value = String(id);
+    opt.textContent = name;
+    sel.appendChild(opt);
+  }
+  if (prev && [...sel.options].some((o) => o.value === prev)) {
+    sel.value = prev;
+  }
 }
 
 document.getElementById("toggleNewCat").addEventListener("click", () => {
@@ -247,6 +286,8 @@ document.getElementById("createCatBtn").addEventListener("click", async () => {
   try {
     const base = await apiBase();
     const color = document.getElementById("newCatColor").value || "#f59e0b";
+    const scopeEl = document.getElementById("listScope");
+    const visibility = scopeEl?.value === "Shared" ? "Shared" : "Private";
     const res = await fetch(`${base}/api/groups`, {
       method: "POST",
       headers: {
@@ -256,7 +297,7 @@ document.getElementById("createCatBtn").addEventListener("click", async () => {
       body: JSON.stringify({
         group_name: name,
         color,
-        visibility: "Private",
+        visibility,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -287,6 +328,7 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
   const btn = document.getElementById("saveBtn");
   btn.disabled = true;
   setStatus("Saving…", true);
+  setWishlistLink("");
   try {
     const jwt = await resolveJwt();
     if (!jwt) {
@@ -349,11 +391,15 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
         setAuthLine();
       }
       setStatus(detail || `Save failed (${res.status})`, false);
+      setWishlistLink("");
       return;
     }
     setStatus(`Saved — item #${data.item_id}`, true);
+    const dashboardUrl = await resolveDashboardUrl();
+    setWishlistLink(dashboardUrl);
   } catch (e) {
     setStatus(e.message || "Network error — is the API running?", false);
+    setWishlistLink("");
   } finally {
     btn.disabled = false;
   }
@@ -363,6 +409,10 @@ document.getElementById("apiBase").addEventListener("change", async () => {
   const v = document.getElementById("apiBase").value.trim().replace(/\/$/, "") || DEFAULT_API;
   await chrome.storage.local.set({ apiBase: v });
   await loadCategories();
+});
+
+document.getElementById("listScope").addEventListener("change", () => {
+  renderCategoryOptions();
 });
 
 async function init() {
