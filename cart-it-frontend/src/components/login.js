@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import '../styles/auth.css';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+import { apiRequest } from './api';
 
 const Login = () => {
   const navigate = useNavigate(); // Hook for navigation
@@ -14,24 +13,16 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${API_BASE_URL}/api/login`, {
+      const data = await apiRequest('/api/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-      
-      // If login is successful, store token and user info, then navigate to dashboard
-      if (response.ok) {
-        const data = await response.json(); 
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        navigate('/dashboard');
-      } else {
-        setStatusMessage("Login Failed: Incorrect email or password");
-      }
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      navigate('/dashboard');
     } catch (error) {
       console.error("Connection error:", error);
-      setStatusMessage("Could not connect to server");
+      setStatusMessage(error.message || "Could not connect to server");
     }
   };
 

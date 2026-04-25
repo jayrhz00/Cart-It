@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import '../styles/auth.css';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+import { apiRequest } from './api';
 
 const Signup = () => {
   const navigate = useNavigate(); // Hook for navigation
@@ -15,23 +14,15 @@ const Signup = () => {
   const handleSignup = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${API_BASE_URL}/api/register`, {
+      await apiRequest('/api/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password }),
       });
-      
-      // If sign up is successful, navigate to login page
-      if (response.ok) {
-        setStatusMessage("Sign up successful! Redirecting to login...");
-        setTimeout(() => navigate('/login'), 2000);
-      } else {
-        const data = await response.text();
-        setStatusMessage(`Sign up failed: ${data}`);
-      }
+      setStatusMessage("Sign up successful! Redirecting to login...");
+      setTimeout(() => navigate('/login'), 2000);
     } catch (error) {
       console.error("Connection error:", error);
-      setStatusMessage("Server is down, please try again later.");
+      setStatusMessage(error.message || "Server is down, please try again later.");
     }
   };
 
