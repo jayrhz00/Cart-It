@@ -9,7 +9,7 @@
   /* Sidebar */
   .dash-sidebar { @apply w-64 bg-white text-black p-8 flex flex-col justify-between; }
   .sidebar-logo { @apply h-24 w-auto object-contain mb-8; }
-  .sidebar-nav-item { @apply flex items-center gap-2 cursor-pointer hover:text-orange-500 transition-colors; }
+  .sidebar-nav-item { @apply w-full flex items-center gap-2 cursor-pointer hover:text-orange-500 transition-colors text-left bg-transparent border-0 p-0; }
   
   /* Extension Card Style */
   .extension-card { @apply bg-orange-50 p-4 rounded-2xl border border-orange-100 mt-8 mb-4 text-center; }
@@ -73,5 +73,17 @@
   .selected-item-image { @apply w-full h-28 object-cover rounded-lg bg-gray-100; }
   .selected-item-image-fallback { @apply flex items-center justify-center text-sm text-gray-500; }
   .selected-item-name { @apply mt-2 text-sm font-semibold leading-tight line-clamp-2; }
+  .selected-item-notes { @apply mt-1 text-xs text-slate-600 leading-snug line-clamp-2; }
   .selected-empty-state { @apply col-span-full border-white/30; }
+  .analytics-grid { @apply grid grid-cols-2 gap-4; }
+  .analytics-stat { @apply bg-white/20 rounded-xl p-3 flex flex-col gap-1; }
+  .analytics-label { @apply text-xs uppercase tracking-wide text-white/80; }
+  .analytics-value { @apply text-lg font-bold text-white; }
+  .analytics-stat-wide { @apply col-span-2; }
+  .recent-items-grid { @apply grid grid-cols-2 md:grid-cols-4 gap-4; }
+  .recent-item { @apply block bg-white rounded-xl p-2 text-black no-underline; }
+  .recent-item-image { @apply w-full h-24 object-cover rounded-lg bg-gray-100; }
+  .recent-item-image-fallback { @apply flex items-center justify-center text-sm text-gray-500; }
+  .recent-item-name { @apply mt-2 text-sm font-semibold leading-tight line-clamp-2; }
+  .recent-item-notes { @apply mt-1 text-xs text-slate-600 leading-snug line-clamp-2; }
 }
