@@ -1035,17 +1035,6 @@ app.post(
         await pool.query(`UPDATE groups SET visibility = 'Shared' WHERE group_id = $1`, [group_id]);
       }
 
-      await pool.query(
-        `
-        INSERT INTO notifications (user_id, item_id, message, is_read)
-        VALUES ($1, NULL, $2, false)
-        `,
-        [
-          invitedUser.user_id,
-          `You were added to shared wishlist "${ownedGroup.rows[0].group_name}"`,
-        ]
-      );
-
       const inviteUrl = `${getFrontendBaseUrl()}/dashboard`;
       const emailResult = await sendGroupInviteEmail({
         toEmail: invitedUser.email,
