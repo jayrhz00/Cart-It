@@ -10,6 +10,8 @@ import {
 } from "react-icons/lu";
 import '../styles/dashboard.css';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+
 /* Serves as the main landing screen for authenticated users.
  * Features navigation, wishlists, analytics, and cart management.
  */
@@ -37,7 +39,7 @@ const Dashboard = () => {
       setUser(user);
         
         // Fetch wishlists from database
-        fetch(`http://localhost:3000/api/wishlists?owner_id=${user.user_id}`)
+        fetch(`${API_BASE_URL}/api/groups?owner_id=${user.user_id}`)
             .then(res => res.json())
             .then(data => setWishlists(data))
             .catch(err => console.error("Error fetching wishlists:", err));
@@ -58,7 +60,7 @@ const Dashboard = () => {
 
       // Send new wishlist data to backend API
       try {
-        const response = await fetch('http://localhost:3000/api/wishlists', {
+        const response = await fetch(`${API_BASE_URL}/api/groups`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
