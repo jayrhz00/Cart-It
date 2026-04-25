@@ -1,6 +1,7 @@
-const DEFAULT_API = "http://127.0.0.1:5001";
+const DEFAULT_API = "https://cart-it.onrender.com";
+const FALLBACK_LOCAL_API = "http://127.0.0.1:5001";
 
-/** Runs in the product tab — same logic as before for name, price, image, store. */
+/** Runs in the product tab — name, price, image, store from the page. */
 function getPageData() {
   const ogImage =
     document.querySelector('meta[property="og:image"]')?.content ||
@@ -38,6 +39,12 @@ function getPageData() {
 }
 
 let lastCapture = null;
+let authRejected = false;
+
+function truncate(s, max) {
+  const t = String(s || "");
+  return t.length <= max ? t : `${t.slice(0, max - 1)}…`;
+}
 
 function setStatus(text, ok) {
   const el = document.getElementById("status");
@@ -45,16 +52,91 @@ function setStatus(text, ok) {
   el.className = ok ? "ok" : "err";
 }
 
-function setAuthLine() {
+function setTabHint(text) {
+  const el = document.getElementById("tabHint");
+  if (el) el.textContent = text || "";
+}
+
+async function resolveJwt() {
+  if (authRejected) return "";
+  let { jwt } = await chrome.storage.local.get(["jwt"]);
+  if (isLikelyJwt(jwt)) return jwt;
+  await syncTokenFromOpenTabs();
+  ({ jwt } = await chrome.storage.local.get(["jwt"]));
+  return isLikelyJwt(jwt) ? jwt : "";
+}
+
+async function setAuthLine() {
   const el = document.getElementById("authStatus");
   if (!el) return;
-  chrome.storage.local.get(["jwt"], (data) => {
-    const ok = !!(data.jwt && String(data.jwt).length > 10);
-    el.textContent = ok
-      ? "Signed in — session synced from your cart-It tab."
-      : "Open cart-It in a browser tab and log in once. This page must stay on the same origin as in the extension manifest (e.g. http://localhost:3000).";
-    el.style.color = ok ? "#166534" : "#92400e";
+  const jwt = await resolveJwt();
+  const ok = !!jwt;
+  el.textContent = ok
+    ? "Signed in — token synced from your cart-It tab."
+    : "Open cart-It (cart-it.pages.dev or localhost), log in, then reopen this panel.";
+  el.style.color = ok ? "#166534" : "#92400e";
+}
+
+function isLikelyJwt(token) {
+  return typeof token === "string" && token.split(".").length === 3 && token.length > 20;
+}
+
+function isCartItHost(hostname) {
+  return hostname === "cart-it.pages.dev" || hostname === "localhost" || hostname === "127.0.0.1";
+}
+
+/** Ask the service worker to copy JWT from any open cart-It tab into extension storage. */
+async function syncTokenFromOpenTabs() {
+  const tabs = await chrome.tabs.query({});
+  const localTabs = tabs.filter((tab) => {
+    if (!tab?.id || !tab.url) return false;
+    try {
+      const u = new URL(tab.url);
+      return isCartItHost(u.hostname);
+    } catch {
+      return false;
+    }
   });
+
+  // Prefer most recently used local tabs and likely app routes.
+  localTabs.sort((a, b) => {
+    const recentA = Number(a.lastAccessed || 0);
+    const recentB = Number(b.lastAccessed || 0);
+    if (recentA !== recentB) return recentB - recentA;
+    const score = (tab) => {
+      try {
+        const u = new URL(tab.url);
+        const p = u.pathname || "/";
+        if (p.startsWith("/dashboard")) return 3;
+        if (p.startsWith("/login") || p.startsWith("/signup")) return 2;
+        return 1;
+      } catch {
+        return 0;
+      }
+    };
+    return score(b) - score(a);
+  });
+
+  for (const tab of localTabs) {
+    try {
+      const injected = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => ({
+          token: localStorage.getItem("token"),
+        }),
+      });
+      const data = injected?.[0]?.result || {};
+      const token = typeof data.token === "string" ? data.token.trim() : "";
+      const clean = token.startsWith("Bearer ") ? token.slice(7).trim() : token;
+      if (isLikelyJwt(clean)) {
+        await chrome.storage.local.set({ jwt: clean });
+        return true;
+      }
+    } catch {
+      /* ignore and continue */
+    }
+  }
+  return false;
 }
 
 async function apiBase() {
@@ -63,37 +145,44 @@ async function apiBase() {
 }
 
 async function refreshFromTab() {
-  setStatus("Reading this tab…", true);
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) {
+      lastCapture = null;
+      setTabHint("");
       setStatus("No active tab.", false);
-      return;
+      return false;
     }
     const [{ result }] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: getPageData,
     });
     lastCapture = result;
-    const urlEl = document.getElementById("productUrl");
-    if (urlEl) urlEl.value = result.product_url || "";
-    setStatus("Ready — adjust URL or notes, pick a category, then save.", true);
+    const title = (result.item_name || "").trim();
+    setTabHint(title ? `Saving from this tab: ${truncate(title, 72)}` : "Saving from this tab.");
+    setStatus("", true);
+    return true;
   } catch (e) {
     lastCapture = null;
+    setTabHint("");
     setStatus(
-      e.message || "Could not read this page (try a normal product tab, not chrome://).",
+      e.message || "Could not read this page (use a normal product page, not chrome://).",
       false
     );
+    return false;
   }
 }
 
 async function loadCategories() {
-  const jwt = (await chrome.storage.local.get(["jwt"])).jwt;
+  const jwt = await resolveJwt();
   const base = await apiBase();
   const sel = document.getElementById("category");
   if (!sel) return;
+  const prev = sel.value;
   sel.innerHTML = '<option value="">No category</option>';
   if (!jwt) {
+    // Clear stale auth error text from previous attempts.
+    setStatus("", true);
     setAuthLine();
     return;
   }
@@ -103,6 +192,16 @@ async function loadCategories() {
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) {
+      const msg =
+        (data && data.message) ||
+        (typeof data === "string" ? data : null) ||
+        `Could not load categories (HTTP ${res.status}).`;
+      setStatus(msg, false);
+      if (res.status === 403 || res.status === 401) {
+        authRejected = true;
+        await chrome.storage.local.remove(["jwt"]);
+        setStatus("Token mismatch with this API. Log out and back in on cart-It, then reopen this panel.", false);
+      }
       setAuthLine();
       return;
     }
@@ -115,15 +214,73 @@ async function loadCategories() {
       opt.textContent = name;
       sel.appendChild(opt);
     }
-  } catch (_) {
-    /* ignore */
+    if (prev && [...sel.options].some((o) => o.value === prev)) {
+      sel.value = prev;
+    }
+    setStatus("", true);
+  } catch (e) {
+    setStatus(e.message || "Network error loading categories.", false);
   }
   setAuthLine();
 }
 
-document.getElementById("refreshBtn").addEventListener("click", async () => {
-  await refreshFromTab();
-  await loadCategories();
+document.getElementById("toggleNewCat").addEventListener("click", () => {
+  const wrap = document.getElementById("newCatWrap");
+  if (!wrap) return;
+  wrap.hidden = !wrap.hidden;
+});
+
+document.getElementById("createCatBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("createCatBtn");
+  const name = document.getElementById("newCatName").value.trim();
+  if (!name) {
+    setStatus("Enter a category name.", false);
+    return;
+  }
+  const jwt = await resolveJwt();
+  if (!jwt) {
+    setStatus("Sign in on cart-It first.", false);
+    return;
+  }
+  btn.disabled = true;
+  setStatus("Creating category…", true);
+  try {
+    const base = await apiBase();
+    const color = document.getElementById("newCatColor").value || "#f59e0b";
+    const res = await fetch(`${base}/api/groups`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${jwt}`,
+      },
+      body: JSON.stringify({
+        group_name: name,
+        color,
+        visibility: "Private",
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (res.status === 403 || res.status === 401) {
+        authRejected = true;
+        await chrome.storage.local.remove(["jwt"]);
+      }
+      setStatus(data.message || data.error || "Could not create category.", false);
+      return;
+    }
+    const gid = data.group?.group_id;
+    document.getElementById("newCatName").value = "";
+    document.getElementById("newCatWrap").hidden = true;
+    await loadCategories();
+    if (gid != null) {
+      document.getElementById("category").value = String(gid);
+    }
+    setStatus("Category created.", true);
+  } catch (e) {
+    setStatus(e.message || "Network error.", false);
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 document.getElementById("saveBtn").addEventListener("click", async () => {
@@ -131,17 +288,24 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
   btn.disabled = true;
   setStatus("Saving…", true);
   try {
-    const { jwt } = await chrome.storage.local.get(["jwt"]);
+    const jwt = await resolveJwt();
     if (!jwt) {
-      setStatus("Not signed in — open cart-It and log in on a matching tab.", false);
+      await chrome.storage.local.remove(["jwt"]);
+      setStatus("Not signed in — open cart-It, log in, leave that tab open, then try again.", false);
+      await setAuthLine();
+      return;
+    }
+    await refreshFromTab();
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const cap = lastCapture;
+    const fallbackUrl = activeTab?.url ? String(activeTab.url).trim() : "";
+    const fallbackTitle = activeTab?.title ? String(activeTab.title).trim() : "";
+    const productUrl = (cap && cap.product_url ? String(cap.product_url) : fallbackUrl).trim();
+    if (!productUrl) {
+      setStatus("Could not read this tab. Open a product page and try again.", false);
       return;
     }
     const base = await apiBase();
-    const productUrl = document.getElementById("productUrl").value.trim();
-    if (!productUrl) {
-      setStatus("Product URL is required. Click “Use current tab”.", false);
-      return;
-    }
     const notes = document.getElementById("notes").value.trim();
     const gidRaw = document.getElementById("category").value;
     const group_id = gidRaw === "" ? null : parseInt(gidRaw, 10);
@@ -150,21 +314,20 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
       return;
     }
 
-    // If panel was opened before navigating to the product page, refresh now.
-    if (!lastCapture) {
-      await refreshFromTab();
+    const item_name = ((cap && cap.item_name) || fallbackTitle || "Saved item").trim();
+    if (!item_name) {
+      setStatus("Could not read a product title from this page. Try refreshing the product tab.", false);
+      return;
     }
-    const cap = lastCapture || {};
-    const item_name = (cap.item_name || "Saved item").trim();
-    const rawPrice = parseFloat(String(cap.current_price != null ? cap.current_price : "0"), 10);
+    const rawPrice = parseFloat(String(cap && cap.current_price != null ? cap.current_price : "0"), 10);
     const safePrice = Number.isNaN(rawPrice) || rawPrice < 0 ? 0 : rawPrice;
 
     const body = {
       item_name,
       product_url: productUrl,
       current_price: safePrice,
-      image_url: (cap.image_url || "").trim() || null,
-      store: (cap.store || "").trim() || null,
+      image_url: (cap && cap.image_url ? String(cap.image_url) : "").trim() || null,
+      store: (cap && cap.store ? String(cap.store) : "").trim() || null,
       notes: notes || null,
       group_id,
     };
@@ -180,6 +343,11 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const detail = data.message || data.error || JSON.stringify(data);
+      if (res.status === 401 || res.status === 403) {
+        authRejected = true;
+        await chrome.storage.local.remove(["jwt"]);
+        setAuthLine();
+      }
       setStatus(detail || `Save failed (${res.status})`, false);
       return;
     }
@@ -199,8 +367,17 @@ document.getElementById("apiBase").addEventListener("change", async () => {
 
 async function init() {
   const { apiBase: stored } = await chrome.storage.local.get(["apiBase"]);
-  document.getElementById("apiBase").value = stored || DEFAULT_API;
-  setAuthLine();
+  const apiEl = document.getElementById("apiBase");
+  const normalizedStored = (stored || "").trim().replace(/\/$/, "");
+  const shouldMigrate =
+    !normalizedStored ||
+    normalizedStored === FALLBACK_LOCAL_API ||
+    normalizedStored === "http://localhost:5001";
+  const resolvedBase = shouldMigrate ? DEFAULT_API : normalizedStored;
+  await chrome.storage.local.set({ apiBase: resolvedBase });
+  if (apiEl) apiEl.value = resolvedBase;
+  authRejected = false;
+  await setAuthLine();
   await refreshFromTab();
   await loadCategories();
 }
@@ -209,7 +386,12 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
   if (changes.jwt) {
     setAuthLine();
-    loadCategories();
+  }
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    setAuthLine().then(loadCategories);
   }
 });
 

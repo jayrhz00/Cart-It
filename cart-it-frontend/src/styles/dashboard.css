@@ -33,11 +33,16 @@
   .create-wishlist-btn { @apply h-48 bg-[#DB8046] p-6 rounded-[40px] flex flex-col items-center justify-center space-y-3 transition-transform hover:scale-105; }
   .create-wishlist-label { @apply text-xs italic font-semibold; }
   
-  .wishlist-card { @apply bg-white rounded-t-3xl rounded-b-lg p-2 flex flex-col items-center; }
+  .wishlist-card { @apply bg-white rounded-t-3xl rounded-b-lg p-2 flex flex-col items-center text-left transition-transform hover:scale-[1.02]; }
+  .wishlist-card-active { @apply ring-2 ring-orange-300; }
   .wishlist-img-placeholder { @apply w-28 h-28 bg-[#DB8046] rounded-t-2xl rounded-b-md flex items-center justify-center; }
-  .wishlist-card-footer { @apply w-full flex justify-between items-center px-1 py-1 mt-1; }
-  .wishlist-card-name { @apply font-bold text-black; }
-  .wishlist-item-count { @apply font-normal italic text-[#7C8188]; }
+  .wishlist-mosaic { @apply w-28 h-28 grid grid-cols-2 grid-rows-2 gap-1 rounded-t-2xl rounded-b-md overflow-hidden bg-[#DB8046]/15; }
+  .wishlist-mosaic-cell { @apply w-full h-full; }
+  .wishlist-mosaic-img { @apply object-cover; }
+  .wishlist-mosaic-placeholder { @apply bg-[#DB8046]; }
+  .wishlist-card-footer { @apply w-full flex flex-col items-start px-1 py-1 mt-1 gap-1; }
+  .wishlist-card-name { @apply font-bold text-black break-words leading-tight; }
+  .wishlist-item-count { @apply font-normal italic text-[#7C8188] leading-tight; }
 
   .empty-state { 
     @apply h-48 col-span-4 flex items-center justify-center text-white/50 italic text-lg py-10 border-2 border-dashed border-white/20 rounded-[40px]; 
@@ -62,4 +67,11 @@
   .box-placeholder { @apply h-20 bg-white/20 rounded-xl; }
   .cart-grid { @apply grid grid-cols-4 gap-4; }
   .cart-placeholder { @apply h-16 bg-white/20 rounded-lg; }
+  .selected-items-card { @apply mb-8; }
+  .selected-items-grid { @apply grid grid-cols-2 md:grid-cols-4 gap-4; }
+  .selected-item { @apply block bg-white rounded-xl p-2 text-black no-underline; }
+  .selected-item-image { @apply w-full h-28 object-cover rounded-lg bg-gray-100; }
+  .selected-item-image-fallback { @apply flex items-center justify-center text-sm text-gray-500; }
+  .selected-item-name { @apply mt-2 text-sm font-semibold leading-tight line-clamp-2; }
+  .selected-empty-state { @apply col-span-full border-white/30; }
 }

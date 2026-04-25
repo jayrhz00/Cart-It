@@ -22,6 +22,7 @@ const Dashboard = () => {
   // State for wishlists - initialized as empty array 
   const [wishlists, setWishlists] = useState([]); 
   const [cartItems, setCartItems] = useState([]);
+  const [selectedGroupId, setSelectedGroupId] = useState(null);
 
   // State for modals (creating new wishlist)
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -76,6 +77,11 @@ const Dashboard = () => {
     }
   };
 
+  const selectedItems =
+    selectedGroupId == null
+      ? []
+      : cartItems.filter((item) => item.group_id === selectedGroupId);
+
   return (
     <div className="dashboard-container">
       {/* Sidebar */}
@@ -124,15 +130,35 @@ const Dashboard = () => {
               wishlists.map((list) => {
                 const listId = list.group_id ?? list.id;
                 const listName = list.group_name ?? list.name ?? "Untitled";
-                const itemCount = cartItems.filter((item) => item.group_id === listId).length;
+                const listItems = cartItems.filter((item) => item.group_id === listId);
+                const itemCount = listItems.length;
+                const previewImages = listItems
+                  .map((item) => item.image_url)
+                  .filter(Boolean)
+                  .slice(0, 4);
+                const isSelected = selectedGroupId === listId;
                 return (
-                <div key={listId} className="wishlist-card">
-                  <div className="wishlist-img-placeholder"></div>
+                <button
+                  key={listId}
+                  className={`wishlist-card ${isSelected ? "wishlist-card-active" : ""}`}
+                  onClick={() => setSelectedGroupId(listId)}
+                  type="button"
+                >
+                  <div className="wishlist-mosaic" aria-hidden="true">
+                    {Array.from({ length: 4 }).map((_, idx) => {
+                      const src = previewImages[idx];
+                      return src ? (
+                        <img key={idx} src={src} alt="" className="wishlist-mosaic-cell wishlist-mosaic-img" />
+                      ) : (
+                        <div key={idx} className="wishlist-mosaic-cell wishlist-mosaic-placeholder" />
+                      );
+                    })}
+                  </div>
                   <div className="wishlist-card-footer">
                     <span className="wishlist-card-name">{listName}</span>
-                    <span className="wishlist-item-count">{itemCount} items</span>
+                    <span className="wishlist-item-count">{itemCount} {itemCount === 1 ? "item" : "items"}</span>
                   </div>
-                </div>
+                </button>
               );
               })
             ) : (
@@ -142,6 +168,34 @@ const Dashboard = () => {
             )}
             </div>
         </section>
+
+        {selectedGroupId != null && (
+          <section className="dashboard-card selected-items-card">
+            <h2 className="card-header">Items in selected wishlist</h2>
+            {selectedItems.length > 0 ? (
+              <div className="selected-items-grid">
+                {selectedItems.map((item) => (
+                  <a
+                    key={item.item_id}
+                    href={item.product_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="selected-item"
+                  >
+                    {item.image_url ? (
+                      <img src={item.image_url} alt={item.item_name} className="selected-item-image" />
+                    ) : (
+                      <div className="selected-item-image selected-item-image-fallback">No image</div>
+                    )}
+                    <div className="selected-item-name">{item.item_name}</div>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state selected-empty-state">No items in this wishlist yet.</div>
+            )}
+          </section>
+        )}
 
         {/* Analytics and Recent Items Section */}
         <section className="info-grid">
