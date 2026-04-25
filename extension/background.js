@@ -18,7 +18,12 @@ function isLikelyJwt(token) {
 }
 
 function isCartItHost(hostname) {
-  return hostname === "cart-it.pages.dev" || hostname === "localhost" || hostname === "127.0.0.1";
+  return (
+    hostname === "cart-it.pages.dev" ||
+    hostname.endsWith(".cart-it.pages.dev") ||
+    hostname === "localhost" ||
+    hostname === "127.0.0.1"
+  );
 }
 
 /**
@@ -27,7 +32,6 @@ function isCartItHost(hostname) {
  * this keeps chrome.storage.local.jwt in sync with the site you logged into.
  */
 async function syncTokenFromCartItTabs() {
-  const { jwt_origin: pinnedOrigin } = await chrome.storage.local.get(["jwt_origin"]);
   const tabs = await chrome.tabs.query({});
   for (const tab of tabs) {
     if (!tab.id || !tab.url) continue;
@@ -38,7 +42,6 @@ async function syncTokenFromCartItTabs() {
       continue;
     }
     if (!isCartItHost(u.hostname)) continue;
-    if (pinnedOrigin && u.origin !== pinnedOrigin) continue;
     try {
       const injected = await chrome.scripting.executeScript({
         target: { tabId: tab.id },

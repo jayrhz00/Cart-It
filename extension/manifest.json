@@ -31,6 +31,7 @@
     {
       "matches": [
         "https://cart-it.pages.dev/*",
+        "https://*.cart-it.pages.dev/*",
         "http://localhost/*",
         "http://127.0.0.1/*",
         "https://localhost/*",
