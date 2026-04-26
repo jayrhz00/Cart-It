@@ -148,25 +148,6 @@ let authRejected = false;
 let cachedGroups = [];
 let currentUserLabel = "";
 
-function hexToRgba(hex, alpha) {
-  const cleaned = String(hex || "").trim().replace("#", "");
-  if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) return `rgba(241,245,249,${alpha})`;
-  const r = parseInt(cleaned.slice(0, 2), 16);
-  const g = parseInt(cleaned.slice(2, 4), 16);
-  const b = parseInt(cleaned.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
-function refreshCategoryColorChip() {
-  const chip = document.getElementById("categoryColorChip");
-  const sel = document.getElementById("category");
-  if (!chip || !sel) return;
-  const selectedId = sel.value;
-  const group = cachedGroups.find((g) => String(g.group_id) === String(selectedId));
-  const color = group?.color || "#e2e8f0";
-  chip.style.background = `linear-gradient(145deg, ${hexToRgba(color, 0.28)}, ${hexToRgba(color, 0.9)})`;
-}
-
 function truncate(s, max) {
   const t = String(s || "");
   return t.length <= max ? t : `${t.slice(0, max - 1)}…`;
@@ -415,13 +396,12 @@ function renderCategoryOptions() {
     const name = g.group_name || `Category ${id}`;
     const opt = document.createElement("option");
     opt.value = String(id);
-    opt.textContent = `🎨 ${name}`;
+    opt.textContent = name;
     sel.appendChild(opt);
   }
   if (prev && [...sel.options].some((o) => o.value === prev)) {
     sel.value = prev;
   }
-  refreshCategoryColorChip();
 }
 
 document.getElementById("toggleNewCat").addEventListener("click", () => {
@@ -446,7 +426,6 @@ document.getElementById("createCatBtn").addEventListener("click", async () => {
   setStatus("Creating category…", true);
   try {
     const base = await apiBase();
-    const color = document.getElementById("newCatColor").value || "#f59e0b";
     const scopeEl = document.getElementById("listScope");
     const visibility = scopeEl?.value === "Shared" ? "Shared" : "Private";
     const res = await fetch(`${base}/api/groups`, {
@@ -457,7 +436,6 @@ document.getElementById("createCatBtn").addEventListener("click", async () => {
       },
       body: JSON.stringify({
         group_name: name,
-        color,
         visibility,
       }),
     });
@@ -583,9 +561,6 @@ document.getElementById("apiBase").addEventListener("change", async () => {
 
 document.getElementById("listScope").addEventListener("change", () => {
   renderCategoryOptions();
-});
-document.getElementById("category").addEventListener("change", () => {
-  refreshCategoryColorChip();
 });
 
 async function init() {

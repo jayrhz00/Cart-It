@@ -215,15 +215,6 @@ const Dashboard = () => {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const hexToRgba = (hex, alpha) => {
-    const cleaned = String(hex || "").replace("#", "");
-    if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) return `rgba(219, 128, 70, ${alpha})`;
-    const r = parseInt(cleaned.slice(0, 2), 16);
-    const g = parseInt(cleaned.slice(2, 4), 16);
-    const b = parseInt(cleaned.slice(4, 6), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  };
-
   const renderWishlistCard = (list) => {
     const listId = list.group_id ?? list.id;
     const listName = list.group_name ?? list.name ?? "Untitled";
@@ -236,20 +227,18 @@ const Dashboard = () => {
     const isSelected = selectedGroupId === listId;
     const visibility = list.visibility || "Private";
     const collaborators = getCollaboratorCount(listId);
-    const tone = list.color || "#DB8046";
-    const cardStyle = {
-      "--wishlist-gradient-start": hexToRgba(tone, 0.16),
-      "--wishlist-gradient-end": hexToRgba(tone, 0.45),
-      "--wishlist-placeholder": hexToRgba(tone, 0.85),
-    };
+    const isSharedSelected =
+      String(selectedGroup?.visibility || "").trim().toLowerCase() === "shared";
 
     return (
       <button
         key={listId}
         className={`wishlist-card ${isSelected ? "wishlist-card-active" : ""}`}
-        onClick={() => setSelectedGroupId(listId)}
+        onClick={() => {
+          setSelectedGroupId(listId);
+          navigate(`/wishlist/${listId}`);
+        }}
         type="button"
-        style={cardStyle}
       >
         <div className="wishlist-mosaic" aria-hidden="true">
           {Array.from({ length: 4 }).map((_, idx) => {
@@ -364,11 +353,11 @@ const Dashboard = () => {
                 <option value="Shared">Shared</option>
               </select>
               <span className="selected-controls-help">
-                {selectedGroup?.visibility === "Shared"
+                {isSharedSelected
                   ? "Shared wishlist (invite collaborators by email below)."
                   : "Private wishlist (only you can see items)."}
               </span>
-              {selectedGroup?.visibility === "Shared" && (
+              {isSharedSelected && (
                 <>
                   <div className="invite-row">
                     <input

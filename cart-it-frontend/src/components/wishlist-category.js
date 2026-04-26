@@ -46,8 +46,6 @@ export default function WishlistCategoryPage() {
     })();
   }, [navigate, load]);
 
-  const swatch = group?.color || "#db8046";
-
   return (
     <DashShell>
       <button type="button" className="page-back-link" onClick={() => navigate("/dashboard")}>
@@ -57,7 +55,6 @@ export default function WishlistCategoryPage() {
       {!error && group ? (
         <>
           <header className="wishlist-page-header">
-            <div className="wishlist-page-swatch" style={{ backgroundColor: swatch }} aria-hidden />
             <div>
               <h1 className="dash-title wishlist-page-title">{group.group_name}</h1>
               <p className="wishlist-page-sub">
