@@ -162,7 +162,26 @@ function authenticateToken
 function parsePositivePrice(raw: unknown): number | null {
   const normalized =
     typeof raw === "string"
-      ? raw.replace(/,/g, "").replace(/[^0-9.]/g, "")
+      ? (() => {
+          let token = raw.replace(/\s+/g, "").replace(/[^0-9.,]/g, "");
+          const hasComma = token.includes(",");
+          const hasDot = token.includes(".");
+          if (hasComma && hasDot) {
+            const lastComma = token.lastIndexOf(",");
+            const lastDot = token.lastIndexOf(".");
+            if (lastComma > lastDot) {
+              // 1.799,99 -> 1799.99
+              token = token.replace(/\./g, "").replace(",", ".");
+            } else {
+              // 1,799.99 -> 1799.99
+              token = token.replace(/,/g, "");
+            }
+          } else if (hasComma) {
+            // 17,99 -> 17.99 ; 1,799 -> 1799
+            token = /,\d{1,2}$/.test(token) ? token.replace(",", ".") : token.replace(/,/g, "");
+          }
+          return token;
+        })()
       : raw;
   const num = Number(normalized);
   if (!Number.isFinite(num) || num < 0) return null;

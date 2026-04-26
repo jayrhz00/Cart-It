@@ -13,10 +13,27 @@ function getPageData() {
     "";
   const parsePriceText = (raw) => {
     if (!raw) return null;
-    const cleaned = String(raw).replace(/,/g, "");
-    const match = cleaned.match(/([0-9]+(?:\.[0-9]{1,2})?)/);
-    if (!match) return null;
-    const parsed = Number(match[1]);
+    const compact = String(raw).replace(/\s+/g, "");
+    const match = compact.match(/([0-9][0-9.,]*)/);
+    if (!match?.[1]) return null;
+    let token = match[1];
+    const hasComma = token.includes(",");
+    const hasDot = token.includes(".");
+    if (hasComma && hasDot) {
+      const lastComma = token.lastIndexOf(",");
+      const lastDot = token.lastIndexOf(".");
+      if (lastComma > lastDot) {
+        // 1.799,99 -> 1799.99
+        token = token.replace(/\./g, "").replace(",", ".");
+      } else {
+        // 1,799.99 -> 1799.99
+        token = token.replace(/,/g, "");
+      }
+    } else if (hasComma) {
+      // 17,99 -> 17.99 ; 1,799 -> 1799
+      token = /,\d{1,2}$/.test(token) ? token.replace(",", ".") : token.replace(/,/g, "");
+    }
+    const parsed = Number(token);
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
   };
 
