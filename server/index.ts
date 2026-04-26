@@ -1185,9 +1185,13 @@ app.get("/api/group-members", authenticateToken, async (req: AuthRequest, res: R
     const owner_id = req.user!.userId;
     const result = await pool.query(
       `
-      SELECT gm.*
+      SELECT
+        gm.*,
+        u.username,
+        u.email
       FROM group_members gm
       JOIN groups g ON g.group_id = gm.group_id
+      JOIN users u ON u.user_id = gm.user_id
       WHERE g.owner_id = $1 OR gm.user_id = $1
       ORDER BY gm.group_id ASC, gm.user_id ASC
       `,
@@ -1259,6 +1263,25 @@ app.post(
         groupName: ownedGroup.rows[0].group_name || "Shared wishlist",
         inviteUrl,
       });
+
+      // Try to surface a join event in in-app notifications using any item in the shared list.
+      // notifications.item_id is NOT NULL, so we can only create one if this list already has at least one item.
+      const firstGroupItem = await pool.query(
+        `SELECT item_id FROM cart_items WHERE group_id = $1 ORDER BY item_id ASC LIMIT 1`,
+        [group_id]
+      );
+      if (firstGroupItem.rows.length > 0) {
+        const itemId = firstGroupItem.rows[0].item_id;
+        const invitedLabel = invitedUser.username || invitedUser.email || "A user";
+        const groupLabel = ownedGroup.rows[0].group_name || "Shared wishlist";
+        await pool.query(
+          `
+          INSERT INTO notifications (user_id, item_id, message, is_read)
+          VALUES ($1, $2, $3, false)
+          `,
+          [owner_id, itemId, `${invitedLabel} joined "${groupLabel}" as Editor.`]
+        );
+      }
 
       return res.status(200).json({
         message: emailResult.sent

@@ -35,7 +35,7 @@
   .create-wishlist-btn { @apply h-48 bg-[#DB8046] p-6 rounded-[40px] flex flex-col items-center justify-center space-y-3 transition-transform hover:scale-105; }
   .create-wishlist-label { @apply text-xs italic font-semibold; }
   
-  .wishlist-card { @apply bg-white rounded-t-3xl rounded-b-lg p-2 flex flex-col items-center text-left transition-transform hover:scale-[1.02]; }
+  .wishlist-card { @apply bg-white border-2 border-white rounded-t-3xl rounded-b-lg p-3 flex flex-col items-center text-left transition-transform hover:scale-[1.02]; }
   .wishlist-card-active { @apply ring-2 ring-orange-300; }
   .wishlist-img-placeholder { @apply w-28 h-28 bg-[#DB8046] rounded-t-2xl rounded-b-md flex items-center justify-center; }
   .wishlist-mosaic { @apply w-28 h-28 grid grid-cols-2 grid-rows-2 gap-1 rounded-t-2xl rounded-b-md overflow-hidden bg-[#DB8046]/15; }

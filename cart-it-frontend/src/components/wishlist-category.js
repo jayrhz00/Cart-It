@@ -14,6 +14,7 @@ export default function WishlistCategoryPage() {
   const navigate = useNavigate();
   const [group, setGroup] = useState(null);
   const [items, setItems] = useState([]);
+  const [members, setMembers] = useState([]);
   const [error, setError] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteStatus, setInviteStatus] = useState("");
@@ -78,8 +79,11 @@ export default function WishlistCategoryPage() {
         method: "POST",
         body: JSON.stringify({ email, role: "Editor" }),
       });
-      setInviteStatus(result?.message || "Invite sent.");
+      const invitedLabel = result?.invited?.username || result?.invited?.email || email;
+      const groupLabel = group?.group_name || "this wishlist";
+      setInviteStatus(`${invitedLabel} added to "${groupLabel}" as Editor.`);
       setInviteEmail("");
+      await load();
     } catch (e) {
       setInviteStatus(e.message || "Could not send invite.");
     }
@@ -91,14 +95,23 @@ export default function WishlistCategoryPage() {
       setError("Invalid category.");
       return;
     }
-    const [g, list] = await Promise.all([
+    const [g, list, memberRows] = await Promise.all([
       apiRequest(`/api/groups/${gid}`),
       apiRequest(`/api/cart-items?group_id=${encodeURIComponent(String(gid))}`),
+      apiRequest("/api/group-members").catch(() => []),
     ]);
     setGroup(g);
     setItems(Array.isArray(list) ? list : []);
+    const perGroup = Array.isArray(memberRows)
+      ? memberRows.filter((m) => Number(m.group_id) === gid)
+      : [];
+    setMembers(perGroup);
     setError("");
   }, [groupId]);
+
+  const ownerMembers = members.filter((m) => String(m.role || "").toLowerCase() === "owner");
+  const editorMembers = members.filter((m) => String(m.role || "").toLowerCase() !== "owner");
+  const sortedMembers = [...ownerMembers, ...editorMembers];
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -158,6 +171,25 @@ export default function WishlistCategoryPage() {
                 <p className="wishlist-page-sub">
                   Shared wishlist: invite collaborators by email.
                 </p>
+                {sortedMembers.length > 0 ? (
+                  <div className="members-list">
+                    {sortedMembers.map((member) => {
+                      const role = String(member.role || "").toLowerCase() === "owner" ? "Owner" : "Editor";
+                      const label =
+                        member.username || member.email || `User #${member.user_id}`;
+                      return (
+                        <div key={`${member.group_id}-${member.user_id}`} className="member-row">
+                          <span>{label}</span>
+                          <span
+                            className={`member-role ${role === "Owner" ? "member-role-owner" : "member-role-editor"}`}
+                          >
+                            {role}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </>
             ) : (
               <p className="wishlist-page-sub">Private wishlist: only you can see items.</p>

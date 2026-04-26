@@ -122,12 +122,15 @@
   font-size: 0.85rem;
   font-weight: 600;
 }
-.full-item-paid-row input[type="number"] {
+.full-item-paid-row input {
   width: 120px;
   padding: 8px 10px;
   border-radius: 8px;
   border: 1px solid #cbd5e1;
   font-size: 0.9rem;
+  background: #fff;
+  color: #111827;
+  caret-color: #111827;
 }
 .full-item-notes textarea {
   width: 100%;
@@ -139,6 +142,9 @@
   font-family: inherit;
   font-size: 0.9rem;
   resize: vertical;
+  background: #fff;
+  color: #111827;
+  caret-color: #111827;
 }
 .full-item-notes-label {
   font-size: 0.85rem;

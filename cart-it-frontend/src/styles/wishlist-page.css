@@ -65,6 +65,12 @@
   border-radius: 8px;
   padding: 8px 10px;
   border: 1px solid #fed7aa;
+  background: #fff;
+  color: #111827;
+}
+.wishlist-page-controls select option {
+  color: #111827;
+  background: #fff;
 }
 .wishlist-page-controls .invite-row {
   display: flex;
@@ -78,6 +84,8 @@
   border-radius: 8px;
   border: 1px solid #fed7aa;
   padding: 8px 10px;
+  background: #fff;
+  color: #111827;
 }
 .wishlist-page-controls .invite-btn {
   border: 1px solid #fed7aa;
@@ -87,6 +95,36 @@
   padding: 8px 12px;
   font-weight: 700;
   cursor: pointer;
+}
+.members-list {
+  margin: 8px 0 0;
+  display: grid;
+  gap: 6px;
+}
+.member-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: #ffedd5;
+}
+.member-role {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.member-role-owner {
+  background: #1d4ed8;
+  color: #dbeafe;
+}
+.member-role-editor {
+  background: #a16207;
+  color: #fef9c3;
 }
 .empty-inline {
   color: #ffedd5;

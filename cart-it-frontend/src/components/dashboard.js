@@ -575,7 +575,7 @@ const Dashboard = () => {
               ))}
             </div>
           ) : (
-            <div className="empty-state selected-empty-state">No price-drop notifications yet.</div>
+            <div className="empty-state selected-empty-state">No notifications yet.</div>
           )}
         </section>
 

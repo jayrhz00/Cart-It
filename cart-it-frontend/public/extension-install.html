@@ -21,8 +21,6 @@
       <button class="primary" id="edgeOpenBtn">Open Edge extensions</button>
       <button class="secondary" id="chromeOpenBtn">Open Chrome extensions</button>
       <p class="hint">Browser security does not allow websites to auto-install extensions silently. One click still required.</p>
-      <button class="secondary" id="edgeBtn">Copy edge://extensions</button>
-      <button class="secondary" id="chromeBtn">Copy chrome://extensions</button>
       <p class="hint" id="hint"></p>
     </div>
     <script>
@@ -43,8 +41,6 @@
       }
       document.getElementById("edgeOpenBtn").addEventListener("click", () => tryOpen("edge://extensions"));
       document.getElementById("chromeOpenBtn").addEventListener("click", () => tryOpen("chrome://extensions"));
-      document.getElementById("edgeBtn").addEventListener("click", () => copy("edge://extensions"));
-      document.getElementById("chromeBtn").addEventListener("click", () => copy("chrome://extensions"));
     </script>
   </body>
 </html>
