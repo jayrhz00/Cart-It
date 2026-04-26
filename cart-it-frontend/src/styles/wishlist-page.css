@@ -46,6 +46,48 @@
 .wishlist-page-list {
   max-width: 720px;
 }
+.wishlist-page-controls {
+  max-width: 720px;
+  margin-bottom: 14px;
+}
+.wishlist-page-controls label {
+  display: block;
+  margin-bottom: 6px;
+  color: #ffedd5;
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+}
+.wishlist-page-controls select {
+  width: 100%;
+  max-width: 240px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  padding: 8px 10px;
+  border: 1px solid #fed7aa;
+}
+.wishlist-page-controls .invite-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  margin-bottom: 8px;
+}
+.wishlist-page-controls .invite-input {
+  flex: 1;
+  max-width: 420px;
+  border-radius: 8px;
+  border: 1px solid #fed7aa;
+  padding: 8px 10px;
+}
+.wishlist-page-controls .invite-btn {
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+  color: #9a3412;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
 .empty-inline {
   color: #ffedd5;
   padding: 16px;

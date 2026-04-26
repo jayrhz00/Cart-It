@@ -17,8 +17,11 @@
   <body>
     <div class="card">
       <h1>Install Cart-It Extension</h1>
-      <p>Use one of these buttons, paste the copied URL into your address bar, enable Developer mode, and click Load unpacked.</p>
-      <button class="primary" id="edgeBtn">Copy edge://extensions</button>
+      <p>Use one of these buttons to open your browser extensions page, then enable Developer mode and click Load unpacked.</p>
+      <button class="primary" id="edgeOpenBtn">Open Edge extensions</button>
+      <button class="secondary" id="chromeOpenBtn">Open Chrome extensions</button>
+      <p class="hint">Browser security does not allow websites to auto-install extensions silently. One click still required.</p>
+      <button class="secondary" id="edgeBtn">Copy edge://extensions</button>
       <button class="secondary" id="chromeBtn">Copy chrome://extensions</button>
       <p class="hint" id="hint"></p>
     </div>
@@ -30,6 +33,16 @@
           () => (hint.textContent = `Copy manually: ${text}`)
         );
       }
+      function tryOpen(url) {
+        try {
+          window.location.href = url;
+          setTimeout(() => copy(url), 300);
+        } catch (_) {
+          copy(url);
+        }
+      }
+      document.getElementById("edgeOpenBtn").addEventListener("click", () => tryOpen("edge://extensions"));
+      document.getElementById("chromeOpenBtn").addEventListener("click", () => tryOpen("chrome://extensions"));
       document.getElementById("edgeBtn").addEventListener("click", () => copy("edge://extensions"));
       document.getElementById("chromeBtn").addEventListener("click", () => copy("chrome://extensions"));
     </script>

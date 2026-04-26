@@ -74,6 +74,7 @@ interface CreateCartItemBody {
   image_url?: string | null;
   store?: string | null;
   current_price: number;
+  is_in_stock?: boolean;
   notes?: string | null;
 }
 
@@ -1293,6 +1294,7 @@ app.post(
       image_url,
       store,
       current_price,
+      is_in_stock,
       notes,
     } = req.body;
 
@@ -1320,6 +1322,11 @@ app.post(
         message: "current_price must be a non-negative number",
       });
     }
+    if (is_in_stock !== undefined && typeof is_in_stock !== "boolean") {
+      return res.status(400).json({
+        message: "is_in_stock must be a boolean when provided",
+      });
+    }
 
     let resolvedGroupId: number | null = null;
     if (group_id != null) {
@@ -1342,8 +1349,8 @@ app.post(
     const itemResult = await pool.query(
       `
       INSERT INTO cart_items 
-      (user_id, group_id, item_name, product_url, image_url, store, current_price, notes, is_purchased)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false)
+      (user_id, group_id, item_name, product_url, image_url, store, current_price, is_in_stock, notes, is_purchased)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false)
       RETURNING item_id
       `,
       [
@@ -1354,6 +1361,7 @@ app.post(
         image_url ?? null,
         store ?? null,
         priceNum,
+        is_in_stock === false ? false : true,
         notes || null,
       ]
     );
