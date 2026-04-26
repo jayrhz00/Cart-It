@@ -152,6 +152,22 @@ CREATE TABLE IF NOT EXISTS item_group_comments
 
 CREATE INDEX IF NOT EXISTS idx_item_group_comments_item ON item_group_comments(item_id);
 
+-- Shared thread: comments on the wishlist/group itself (not tied to one item)
+CREATE TABLE IF NOT EXISTS group_comments
+(
+    comment_id SERIAL PRIMARY KEY,
+    group_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    body TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT fk_group_comments_group
+        FOREIGN KEY (group_id) REFERENCES groups(group_id) ON DELETE CASCADE,
+    CONSTRAINT fk_group_comments_user
+        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_group_comments_group ON group_comments(group_id);
+
 -- TABLE 5: price_history 
 -- Stores past price records for each saved item 
 -- Tracks price changes over time 

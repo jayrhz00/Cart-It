@@ -76,6 +76,10 @@ interface InviteGroupMemberBody {
   role?: "Editor" | "Owner";
 }
 
+interface GroupCommentBody {
+  body?: string;
+}
+
 interface CreateCartItemBody {
   group_id?: number | null;
   item_name: string;
@@ -800,6 +804,18 @@ async function initializeDatabase(): Promise<void> {
       `CREATE INDEX IF NOT EXISTS idx_item_group_comments_item ON item_group_comments(item_id)`
     );
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS group_comments (
+        comment_id SERIAL PRIMARY KEY,
+        group_id INTEGER NOT NULL REFERENCES groups(group_id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+        body TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+      )
+    `);
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_group_comments_group ON group_comments(group_id)`
+    );
+    await pool.query(`
       INSERT INTO item_private_notes (item_id, user_id, body, updated_at)
       SELECT ci.item_id, ci.user_id, ci.notes, ci.created_at
       FROM cart_items ci
@@ -1179,6 +1195,86 @@ app.get("/api/groups/:id", authenticateToken, async (req: AuthRequest, res: Resp
     return res.status(500).json({ message: "Failed to fetch category" });
   }
 });
+
+app.get(
+  "/api/groups/:id/comments",
+  authenticateToken,
+  async (req: AuthRequest<any, { id: string }>, res: Response) => {
+    try {
+      const group_id = Number(req.params.id);
+      const userId = req.user!.userId;
+      if (isNaN(group_id)) {
+        return res.status(400).json({ message: "Invalid group ID" });
+      }
+      const allowed = await userCanAccessGroup(userId, group_id);
+      if (!allowed) {
+        return res.status(404).json({ message: "Group not found" });
+      }
+
+      const rows = await pool.query(
+        `
+        SELECT
+          gc.comment_id,
+          gc.group_id,
+          gc.user_id,
+          gc.body,
+          gc.created_at,
+          u.username,
+          u.email
+        FROM group_comments gc
+        JOIN users u ON u.user_id = gc.user_id
+        WHERE gc.group_id = $1
+        ORDER BY gc.created_at ASC, gc.comment_id ASC
+        `,
+        [group_id]
+      );
+      return res.status(200).json(rows.rows);
+    } catch (error) {
+      console.error("Fetch group-level comments failed:", error);
+      return res.status(500).json({ message: "Failed to fetch group comments" });
+    }
+  }
+);
+
+app.post(
+  "/api/groups/:id/comments",
+  authenticateToken,
+  async (req: AuthRequest<GroupCommentBody, { id: string }>, res: Response) => {
+    try {
+      const group_id = Number(req.params.id);
+      const userId = req.user!.userId;
+      const text = String(req.body?.body ?? "").trim();
+      if (isNaN(group_id)) {
+        return res.status(400).json({ message: "Invalid group ID" });
+      }
+      if (!text) {
+        return res.status(400).json({ message: "Comment text is required" });
+      }
+      const allowed = await userCanAccessGroup(userId, group_id);
+      if (!allowed) {
+        return res.status(404).json({ message: "Group not found" });
+      }
+
+      const ins = await pool.query(
+        `
+        INSERT INTO group_comments (group_id, user_id, body)
+        VALUES ($1, $2, $3)
+        RETURNING comment_id, group_id, user_id, body, created_at
+        `,
+        [group_id, userId, text]
+      );
+      const who = await storage.getUser(userId);
+      return res.status(201).json({
+        ...ins.rows[0],
+        username: who?.username ?? null,
+        email: who?.email ?? null,
+      });
+    } catch (error) {
+      console.error("Post group-level comment failed:", error);
+      return res.status(500).json({ message: "Failed to post group comment" });
+    }
+  }
+);
 
 // CREATE a new group for a user thats logged in 
 app.post(

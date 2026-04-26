@@ -48,6 +48,9 @@ export default function FullItemEditor({ item, onChanged, showGroupComments = fa
   );
   const [busy, setBusy] = useState(false);
   const [threadBusy, setThreadBusy] = useState(false);
+  const [copyBusy, setCopyBusy] = useState(false);
+  const [privateTargets, setPrivateTargets] = useState([]);
+  const [selectedPrivateGroupId, setSelectedPrivateGroupId] = useState("");
   const [msg, setMsg] = useState("");
 
   const loadThread = useCallback(async () => {
@@ -68,6 +71,37 @@ export default function FullItemEditor({ item, onChanged, showGroupComments = fa
     }
     loadThread().catch(() => setThread([]));
   }, [showGroupComments, loadThread]);
+
+  useEffect(() => {
+    if (!showGroupComments) {
+      setPrivateTargets([]);
+      setSelectedPrivateGroupId("");
+      return;
+    }
+    let alive = true;
+    apiRequest("/api/groups")
+      .then((rows) => {
+        if (!alive) return;
+        const mine = (Array.isArray(rows) ? rows : []).filter((g) => {
+          const isOwner = String(g?.access_role || "").toLowerCase() === "owner";
+          const isPrivate = String(g?.visibility || "").toLowerCase() === "private";
+          return isOwner && isPrivate;
+        });
+        setPrivateTargets(mine);
+        setSelectedPrivateGroupId((prev) => {
+          if (prev && mine.some((g) => String(g.group_id) === String(prev))) return prev;
+          return mine[0] ? String(mine[0].group_id) : "";
+        });
+      })
+      .catch(() => {
+        if (!alive) return;
+        setPrivateTargets([]);
+        setSelectedPrivateGroupId("");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [showGroupComments]);
 
   const patch = async (body) => {
     setBusy(true);
@@ -129,6 +163,39 @@ export default function FullItemEditor({ item, onChanged, showGroupComments = fa
     }
     await patch({ purchase_price: paid });
     setMsg("Purchase amount updated.");
+  };
+
+  const copyToPrivateList = async () => {
+    setCopyBusy(true);
+    setMsg("");
+    try {
+      await apiRequest("/api/cart-items", {
+        method: "POST",
+        body: JSON.stringify({
+          group_id: selectedPrivateGroupId ? Number(selectedPrivateGroupId) : null,
+          item_name: item.item_name,
+          product_url: item.product_url,
+          image_url: item.image_url,
+          store: item.store,
+          current_price: Number(item.current_price) || 0,
+          is_in_stock: item.is_in_stock !== false,
+          notes: notes.trim() || null,
+        }),
+      });
+      if (selectedPrivateGroupId) {
+        const selected = privateTargets.find(
+          (g) => String(g.group_id) === String(selectedPrivateGroupId)
+        );
+        const label = selected?.group_name || "selected private list";
+        setMsg(`Copied to "${label}".`);
+      } else {
+        setMsg("Copied to your private items.");
+      }
+    } catch (e) {
+      setMsg(e.message || "Could not copy to your private list.");
+    } finally {
+      setCopyBusy(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -198,6 +265,32 @@ export default function FullItemEditor({ item, onChanged, showGroupComments = fa
           <span>Mark as purchased</span>
         </label>
       </div>
+
+      {showGroupComments ? (
+        <div className="full-item-row">
+          {privateTargets.length > 0 ? (
+            <select
+              value={selectedPrivateGroupId}
+              disabled={busy || threadBusy || copyBusy}
+              onChange={(e) => setSelectedPrivateGroupId(e.target.value)}
+            >
+              {privateTargets.map((g) => (
+                <option key={g.group_id} value={String(g.group_id)}>
+                  {g.group_name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          <button
+            type="button"
+            className="full-item-secondary-btn"
+            disabled={busy || threadBusy || copyBusy}
+            onClick={copyToPrivateList}
+          >
+            {copyBusy ? "Copying…" : "Copy to my private list"}
+          </button>
+        </div>
+      ) : null}
 
       {item.is_purchased ? (
         <div className="full-item-row full-item-paid-row">
