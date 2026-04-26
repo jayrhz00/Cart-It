@@ -16,6 +16,40 @@ export default function WishlistCategoryPage() {
   const [items, setItems] = useState([]);
   const [error, setError] = useState("");
 
+  const handleRenameWishlist = async () => {
+    if (!group) return;
+    const currentName = String(group.group_name || "").trim();
+    const nextName = window.prompt("Rename wishlist:", currentName);
+    if (nextName == null) return;
+    const trimmed = nextName.trim();
+    if (!trimmed) {
+      setError("Wishlist name cannot be empty.");
+      return;
+    }
+    if (trimmed === currentName) return;
+    try {
+      await apiRequest(`/api/groups/${group.group_id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ group_name: trimmed }),
+      });
+      await load();
+    } catch (e) {
+      setError(e.message || "Could not rename wishlist.");
+    }
+  };
+
+  const handleDeleteWishlist = async () => {
+    if (!group) return;
+    const name = String(group.group_name || "this wishlist");
+    if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    try {
+      await apiRequest(`/api/groups/${group.group_id}`, { method: "DELETE" });
+      navigate("/dashboard");
+    } catch (e) {
+      setError(e.message || "Could not delete wishlist.");
+    }
+  };
+
   const load = useCallback(async () => {
     const gid = Number(groupId);
     if (!groupId || Number.isNaN(gid)) {
@@ -62,6 +96,14 @@ export default function WishlistCategoryPage() {
               </p>
             </div>
           </header>
+          <div className="selected-item-actions" style={{ maxWidth: "360px", marginBottom: "16px" }}>
+            <button type="button" className="item-action-btn" onClick={handleRenameWishlist}>
+              Rename wishlist
+            </button>
+            <button type="button" className="item-action-btn item-action-danger" onClick={handleDeleteWishlist}>
+              Delete wishlist
+            </button>
+          </div>
           <section className="wishlist-page-list">
             {items.length === 0 ? (
               <div className="empty-inline">No items in this category yet. Save from the extension or add one on the dashboard.</div>

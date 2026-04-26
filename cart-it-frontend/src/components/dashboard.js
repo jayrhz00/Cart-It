@@ -165,6 +165,27 @@ const Dashboard = () => {
     }
   };
 
+  const handleRenameWishlist = async (group) => {
+    const currentName = String(group?.group_name || group?.name || "").trim();
+    const nextName = window.prompt("Rename wishlist:", currentName);
+    if (nextName == null) return;
+    const trimmed = nextName.trim();
+    if (!trimmed) {
+      alert("Wishlist name cannot be empty.");
+      return;
+    }
+    if (trimmed === currentName) return;
+    try {
+      await apiRequest(`/api/groups/${group.group_id ?? group.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ group_name: trimmed }),
+      });
+      await reloadDashboardData();
+    } catch (error) {
+      alert(error.message || "Could not rename wishlist.");
+    }
+  };
+
   const handleInviteMember = async () => {
     const email = inviteEmail.trim();
     if (!email || selectedGroupId == null) {
@@ -200,6 +221,8 @@ const Dashboard = () => {
     (list) => String(list.visibility || "").toLowerCase() === "shared"
   );
   const selectedGroup = wishlists.find((list) => (list.group_id ?? list.id) === selectedGroupId);
+  const isSelectedShared =
+    String(selectedGroup?.visibility || "").trim().toLowerCase() === "shared";
   const uncategorizedItems = cartItems.filter((item) => item.group_id == null);
   const purchasedItems = cartItems.filter((item) => Boolean(item.is_purchased));
   const openItems = cartItems.filter((item) => !item.is_purchased);
@@ -227,9 +250,6 @@ const Dashboard = () => {
     const isSelected = selectedGroupId === listId;
     const visibility = list.visibility || "Private";
     const collaborators = getCollaboratorCount(listId);
-    const isSharedSelected =
-      String(selectedGroup?.visibility || "").trim().toLowerCase() === "shared";
-
     return (
       <button
         key={listId}
@@ -353,11 +373,18 @@ const Dashboard = () => {
                 <option value="Shared">Shared</option>
               </select>
               <span className="selected-controls-help">
-                {isSharedSelected
+                {isSelectedShared
                   ? "Shared wishlist (invite collaborators by email below)."
                   : "Private wishlist (only you can see items)."}
               </span>
-              {isSharedSelected && (
+              <button
+                type="button"
+                className="invite-btn"
+                onClick={() => handleRenameWishlist(selectedGroup)}
+              >
+                Rename wishlist
+              </button>
+              {isSelectedShared && (
                 <>
                   <div className="invite-row">
                     <input
