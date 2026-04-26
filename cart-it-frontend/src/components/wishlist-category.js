@@ -15,6 +15,8 @@ export default function WishlistCategoryPage() {
   const [group, setGroup] = useState(null);
   const [items, setItems] = useState([]);
   const [error, setError] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteStatus, setInviteStatus] = useState("");
 
   const handleRenameWishlist = async () => {
     if (!group) return;
@@ -47,6 +49,39 @@ export default function WishlistCategoryPage() {
       navigate("/dashboard");
     } catch (e) {
       setError(e.message || "Could not delete wishlist.");
+    }
+  };
+
+  const handleVisibilityChange = async (nextVisibility) => {
+    if (!group) return;
+    try {
+      await apiRequest(`/api/groups/${group.group_id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ visibility: nextVisibility }),
+      });
+      await load();
+      setInviteStatus("");
+    } catch (e) {
+      setError(e.message || "Could not update wishlist visibility.");
+    }
+  };
+
+  const handleInviteMember = async () => {
+    if (!group) return;
+    const email = inviteEmail.trim();
+    if (!email) {
+      setInviteStatus("Enter an email address first.");
+      return;
+    }
+    try {
+      const result = await apiRequest(`/api/groups/${group.group_id}/invite`, {
+        method: "POST",
+        body: JSON.stringify({ email, role: "Editor" }),
+      });
+      setInviteStatus(result?.message || "Invite sent.");
+      setInviteEmail("");
+    } catch (e) {
+      setInviteStatus(e.message || "Could not send invite.");
     }
   };
 
@@ -96,6 +131,39 @@ export default function WishlistCategoryPage() {
               </p>
             </div>
           </header>
+          <div className="wishlist-page-controls">
+            <label htmlFor="wishlistVisibility">Visibility</label>
+            <select
+              id="wishlistVisibility"
+              value={group.visibility || "Private"}
+              onChange={(e) => handleVisibilityChange(e.target.value)}
+            >
+              <option value="Private">Private</option>
+              <option value="Shared">Shared</option>
+            </select>
+            {String(group.visibility || "").toLowerCase() === "shared" ? (
+              <>
+                <div className="invite-row">
+                  <input
+                    type="email"
+                    className="invite-input"
+                    placeholder="Invite collaborator by email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                  />
+                  <button type="button" className="invite-btn" onClick={handleInviteMember}>
+                    Invite
+                  </button>
+                </div>
+                <p className="wishlist-page-sub">
+                  Shared wishlist: invite collaborators by email.
+                </p>
+              </>
+            ) : (
+              <p className="wishlist-page-sub">Private wishlist: only you can see items.</p>
+            )}
+            {inviteStatus ? <p className="wishlist-page-sub">{inviteStatus}</p> : null}
+          </div>
           <div className="selected-item-actions" style={{ maxWidth: "360px", marginBottom: "16px" }}>
             <button type="button" className="item-action-btn" onClick={handleRenameWishlist}>
               Rename wishlist

@@ -46,8 +46,8 @@
   .wishlist-card-name { @apply font-bold text-black break-words leading-tight; }
   .wishlist-visibility-badge { @apply text-[11px] font-semibold text-orange-700; }
   .wishlist-item-count { @apply font-normal italic text-[#7C8188] leading-tight; }
-  .wishlist-card-actions { @apply mt-1 flex items-center gap-2; }
-  .wishlist-mini-btn { @apply inline-flex items-center justify-center w-7 h-7 rounded-md border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100; }
+  .wishlist-card-actions { @apply mt-1 flex items-center gap-2 w-full; }
+  .wishlist-mini-btn { @apply inline-flex items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 text-xs font-semibold px-2 py-1; }
   .wishlist-mini-danger { @apply text-red-700 border-red-200 bg-red-50 hover:bg-red-100; }
 
   .empty-state { 

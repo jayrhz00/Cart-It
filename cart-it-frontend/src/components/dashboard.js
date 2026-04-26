@@ -6,9 +6,7 @@ import {
   LuChartArea, 
   LuCirclePlus, 
   LuLogOut,
-  LuDownload,
-  LuPencil,
-  LuTrash2
+  LuDownload
 } from "react-icons/lu";
 import '../styles/dashboard.css';
 import { apiRequest } from './api';
@@ -310,7 +308,7 @@ const Dashboard = () => {
                 handleRenameWishlist(list);
               }}
             >
-              <LuPencil size={14} />
+              Rename
             </button>
             <button
               type="button"
@@ -321,7 +319,7 @@ const Dashboard = () => {
                 handleDeleteWishlist(list);
               }}
             >
-              <LuTrash2 size={14} />
+              Delete
             </button>
           </div>
         </div>
@@ -554,7 +552,7 @@ const Dashboard = () => {
         </section>
 
         <section className="dashboard-card notifications-card">
-          <h2 className="card-header">Price Drop Notifications</h2>
+          <h2 className="card-header">Notifications</h2>
           {notifications.length > 0 ? (
             <div className="notifications-list">
               {[...notifications].reverse().slice(0, 8).map((n) => (

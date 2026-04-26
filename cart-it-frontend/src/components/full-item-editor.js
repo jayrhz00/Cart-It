@@ -9,20 +9,28 @@ function money(n) {
   return x.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
+function toEditableMoneyString(value, fallback) {
+  const direct = Number(value);
+  if (Number.isFinite(direct) && direct >= 0) return String(direct);
+  const fb = Number(fallback);
+  if (Number.isFinite(fb) && fb >= 0) return String(fb);
+  return "";
+}
+
 /**
  * One saved product: open link, purchased toggle + paid amount, notes, delete.
  */
 export default function FullItemEditor({ item, onChanged }) {
   const [notes, setNotes] = useState(item.notes || "");
   const [paidStr, setPaidStr] = useState(
-    String(item.purchase_price ?? item.current_price ?? "0")
+    toEditableMoneyString(item.purchase_price, item.current_price)
   );
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
     setNotes(item.notes || "");
-    setPaidStr(String(item.purchase_price ?? item.current_price ?? "0"));
+    setPaidStr(toEditableMoneyString(item.purchase_price, item.current_price));
   }, [item.item_id, item.notes, item.purchase_price, item.current_price]);
 
   const patch = async (body) => {
@@ -145,8 +153,7 @@ export default function FullItemEditor({ item, onChanged }) {
             type="number"
             min="0"
             step="0.01"
-            value={paidStr}
-            disabled={busy}
+            value={paidStr ?? ""}
             onChange={(e) => setPaidStr(e.target.value)}
           />
           <button type="button" className="full-item-secondary-btn" disabled={busy} onClick={savePaidOnly}>
