@@ -48,6 +48,15 @@ interface LoginBody
   password: string;
 }
 
+interface ForgotPasswordBody {
+  email: string;
+}
+
+interface ResetPasswordBody {
+  token: string;
+  new_password: string;
+}
+
 // Body for create group route
 interface CreateGroupBody 
 {
@@ -105,6 +114,10 @@ type AuthRequest<
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
 const PRICE_CHECK_INTERVAL_MINUTES = Number(process.env.PRICE_CHECK_INTERVAL_MINUTES || 180);
+const RESET_PASSWORD_EXP_MINUTES = Math.max(
+  5,
+  Number(process.env.RESET_PASSWORD_EXP_MINUTES || 30)
+);
 
 // Allows frontend to talk to backend
 app.use(cors());
@@ -388,6 +401,43 @@ async function sendOutOfStockEmail({
     subject,
     html,
     genericErrorMessage: "Failed to contact out-of-stock email provider.",
+  });
+}
+
+async function sendPasswordResetEmail({
+  toEmail,
+  toName,
+  resetUrl,
+}: {
+  toEmail: string;
+  toName?: string;
+  resetUrl: string;
+}): Promise<{ sent: boolean; reason?: string }> {
+  const apiKey = String(process.env.RESEND_API_KEY || "").trim();
+  const fromEmail = String(process.env.RESEND_FROM_EMAIL || "").trim();
+  if (!apiKey || !fromEmail) {
+    return {
+      sent: false,
+      reason: "Password reset email provider is not configured (RESEND_API_KEY/RESEND_FROM_EMAIL).",
+    };
+  }
+  const safeName = toName || toEmail;
+  const html = `
+    <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111827">
+      <h2 style="margin-bottom:8px">Reset your Cart-It password</h2>
+      <p style="margin-top:0">Hi ${safeName},</p>
+      <p>Use the link below to set a new password. This link expires in ${RESET_PASSWORD_EXP_MINUTES} minutes.</p>
+      <p><a href="${resetUrl}" target="_blank" rel="noreferrer">${resetUrl}</a></p>
+      <p style="color:#6b7280;font-size:13px">If you did not request this, you can ignore this email.</p>
+    </div>
+  `;
+  return sendResendEmail({
+    apiKey,
+    fromEmail,
+    toEmail,
+    subject: "Reset your Cart-It password",
+    html,
+    genericErrorMessage: "Failed to contact password-reset email provider.",
   });
 }
 
@@ -810,6 +860,87 @@ app.post(
   }
 );
 
+// Public route: always returns generic success message (prevents account enumeration).
+app.post(
+  "/api/auth/forgot-password",
+  async (req: Request<{}, {}, ForgotPasswordBody>, res: Response) => {
+    const genericMessage =
+      "If an account with that email exists, a password reset link has been sent.";
+    try {
+      const email = String(req.body?.email || "").trim().toLowerCase();
+      if (!email) {
+        return res.status(200).json({ message: genericMessage });
+      }
+      const existingUser = await storage.getUserByEmail(email);
+      if (!existingUser) {
+        return res.status(200).json({ message: genericMessage });
+      }
+      const token = jwt.sign(
+        {
+          purpose: "password_reset",
+          userId: existingUser.user_id,
+          email: existingUser.email,
+        },
+        process.env.JWT_SECRET as string,
+        { expiresIn: `${RESET_PASSWORD_EXP_MINUTES}m` }
+      );
+      const resetUrl = `${getFrontendBaseUrl()}/reset-password?token=${encodeURIComponent(token)}`;
+      const emailResult = await sendPasswordResetEmail({
+        toEmail: existingUser.email,
+        toName: existingUser.username || existingUser.email,
+        resetUrl,
+      });
+      if (!emailResult.sent) {
+        console.warn("Password reset email not sent:", emailResult.reason);
+      }
+      return res.status(200).json({ message: genericMessage });
+    } catch (error) {
+      console.error("Forgot password route failed:", error);
+      return res.status(200).json({ message: genericMessage });
+    }
+  }
+);
+
+app.post(
+  "/api/auth/reset-password",
+  async (req: Request<{}, {}, ResetPasswordBody>, res: Response) => {
+    try {
+      const token = String(req.body?.token || "").trim();
+      const newPassword = String(req.body?.new_password || "");
+      if (!token || !newPassword) {
+        return res.status(400).json({ message: "Token and new password are required." });
+      }
+      if (newPassword.length < 8) {
+        return res.status(400).json({ message: "Password must be at least 8 characters." });
+      }
+      const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as {
+        purpose?: string;
+        userId?: number;
+        email?: string;
+      };
+      if (
+        decoded?.purpose !== "password_reset" ||
+        !decoded?.userId ||
+        !decoded?.email
+      ) {
+        return res.status(400).json({ message: "Invalid or expired reset token." });
+      }
+      const existingUser = await storage.getUser(Number(decoded.userId));
+      if (!existingUser || String(existingUser.email).toLowerCase() !== String(decoded.email).toLowerCase()) {
+        return res.status(400).json({ message: "Invalid or expired reset token." });
+      }
+      const password_hash = await bcrypt.hash(newPassword, 10);
+      await pool.query(`UPDATE users SET password_hash = $1 WHERE user_id = $2`, [
+        password_hash,
+        existingUser.user_id,
+      ]);
+      return res.status(200).json({ message: "Password reset successful. You can now log in." });
+    } catch (error) {
+      return res.status(400).json({ message: "Invalid or expired reset token." });
+    }
+  }
+);
+
 // Returns currently authenticated user profile details
 app.get("/api/me", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
@@ -834,6 +965,10 @@ app.get("/api/me", authenticateToken, async (req: AuthRequest, res: Response) =>
 });
 
 // GROUP ROUTES
+// FRONTEND LINK:
+// - Dashboard page calls /api/groups to render wishlist cards.
+// - Wishlist page calls /api/groups/:id for one list and /api/groups/:id/invite for collaboration.
+// - Create modal on dashboard calls POST /api/groups.
 
 // GET all groups that belong to a user that is logged in
 app.get("/api/groups", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -1025,6 +1160,10 @@ app.delete(
 // SIMPLE DATA ROUTES FOR TESTING / FRONTEND
 // These help prove DB is connected and let
 // frontend pull real data
+// FRONTEND LINK:
+// - Extension and pages call /api/cart-items for item lists.
+// - Notifications panel calls /api/notifications.
+// - Analytics page calls /api/analytics/spending.
 
 app.get("/api/users", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
@@ -1261,6 +1400,7 @@ app.post(
         return res.status(400).json({ message: "You already own this wishlist." });
       }
 
+      // Add or update collaborator role for this shared list.
       await pool.query(
         `
         INSERT INTO group_members (group_id, user_id, role)
@@ -1270,6 +1410,7 @@ app.post(
         [group_id, invitedUser.user_id, role]
       );
 
+      // Safety: if owner invites someone to a private list, automatically make it shared.
       if (ownedGroup.rows[0].visibility !== "Shared") {
         await pool.query(`UPDATE groups SET visibility = 'Shared' WHERE group_id = $1`, [group_id]);
       }
@@ -1388,6 +1529,7 @@ app.post(
       resolvedGroupId = gid;
     }
 
+    // Persist item row first (cart_items is the source of truth shown in UI cards).
     const itemResult = await pool.query(
       `
       INSERT INTO cart_items 
@@ -1546,6 +1688,7 @@ app.patch(
       const previousItemName = String(ownerCheck.rows[0].item_name || "Item");
 
       values.push(item_id);
+      // Update only the fields supplied by frontend (partial update behavior).
       const result = await pool.query(
         `
         UPDATE cart_items
@@ -1752,6 +1895,10 @@ app.patch(
 );
 
 // START SERVER
+// FINAL RUNTIME FLOW:
+// 1) Load schema/tables.
+// 2) Start HTTP server.
+// 3) Start background price/stock worker loop.
 async function startServer() {
   try {
     await initializeDatabase();
