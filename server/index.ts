@@ -495,7 +495,9 @@ function extractPriceFromHtml(html: string): number | null {
     }
   }
 
-  const genericPriceMatch = html.match(/"price"\s*:\s*"?([0-9][0-9,]*(?:\.[0-9]+)?)"?/i);
+  // Keep this fallback strict: require decimal format to avoid cents-like integers
+  // from script blobs such as "price":1799 (which often means $17.99).
+  const genericPriceMatch = html.match(/"price"\s*:\s*"?([0-9][0-9,]*\.[0-9]{1,2})"?/i);
   if (genericPriceMatch?.[1]) {
     const fallbackPrice = parsePositivePrice(genericPriceMatch[1]);
     if (fallbackPrice != null) return fallbackPrice;

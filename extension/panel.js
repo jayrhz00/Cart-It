@@ -85,31 +85,6 @@ function getPageData() {
     }
   }
 
-  const jsonLd = document.querySelectorAll('script[type="application/ld+json"]');
-  for (const node of jsonLd) {
-    if (price != null) break;
-    try {
-      const data = JSON.parse(node.textContent);
-      const parsed = parseJsonPrice(data);
-      if (parsed != null) price = parsed;
-    } catch (_) {
-      /* ignore */
-    }
-  }
-
-  if (price == null) {
-    // Next.js commerce sites often store canonical product data here.
-    const nextDataRaw = textFromScript("#__NEXT_DATA__");
-    if (nextDataRaw) {
-      try {
-        const parsed = parseJsonPrice(JSON.parse(nextDataRaw));
-        if (parsed != null) price = parsed;
-      } catch (_) {
-        /* ignore */
-      }
-    }
-  }
-
   if (price == null) {
     const candidates = Array.from(
       document.querySelectorAll(
@@ -130,6 +105,33 @@ function getPageData() {
       if (parsed != null) {
         price = parsed;
         break;
+      }
+    }
+  }
+
+  if (price == null) {
+    const jsonLd = document.querySelectorAll('script[type="application/ld+json"]');
+    for (const node of jsonLd) {
+      if (price != null) break;
+      try {
+        const data = JSON.parse(node.textContent);
+        const parsed = parseJsonPrice(data);
+        if (parsed != null) price = parsed;
+      } catch (_) {
+        /* ignore */
+      }
+    }
+  }
+
+  if (price == null) {
+    // Next.js commerce sites often store canonical product data here.
+    const nextDataRaw = textFromScript("#__NEXT_DATA__");
+    if (nextDataRaw) {
+      try {
+        const parsed = parseJsonPrice(JSON.parse(nextDataRaw));
+        if (parsed != null) price = parsed;
+      } catch (_) {
+        /* ignore */
       }
     }
   }
