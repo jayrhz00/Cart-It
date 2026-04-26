@@ -50,6 +50,7 @@ const Login = () => {
             <h2 className="auth-title">Log in to your account</h2>
               {/* Display status messages */}
             {statusMessage && <div className="status-message">{statusMessage}</div>}
+            {isLoading && <div className="status-loading">Signing you in...</div>}
             <p className="auth-subtitle">
               Don’t have an account? <Link to="/signup" className="link-styled">Sign up here.</Link>
             </p>
