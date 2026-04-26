@@ -4,6 +4,9 @@ import LandingPage from './components/landing-page';
 import Login from './components/login';
 import Signup from './components/signup';
 import Dashboard from './components/dashboard';
+import WishlistCategoryPage from './components/wishlist-category';
+import CartPage from './components/cart-page';
+import SpendingAnalyticsPage from './components/spending-analytics';
 
 function App() {
   return (
@@ -13,6 +16,9 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/wishlist/:groupId" element={<WishlistCategoryPage />} />
+        <Route path="/cart" element={<CartPage />} />
+        <Route path="/analytics" element={<SpendingAnalyticsPage />} />
       </Routes>
     </Router>
   );

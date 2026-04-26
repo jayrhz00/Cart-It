@@ -159,7 +159,11 @@ function authenticateToken
 }
 
 function parsePositivePrice(raw: unknown): number | null {
-  const num = Number(raw);
+  const normalized =
+    typeof raw === "string"
+      ? raw.replace(/,/g, "").replace(/[^0-9.]/g, "")
+      : raw;
+  const num = Number(normalized);
   if (!Number.isFinite(num) || num < 0) return null;
   return Number(num.toFixed(2));
 }
@@ -210,6 +214,31 @@ async function sendGroupInviteEmail({
     </div>
   `;
 
+  return sendResendEmail({
+    apiKey,
+    fromEmail,
+    toEmail,
+    subject,
+    html,
+    genericErrorMessage: "Failed to contact invite email provider.",
+  });
+}
+
+async function sendResendEmail({
+  apiKey,
+  fromEmail,
+  toEmail,
+  subject,
+  html,
+  genericErrorMessage,
+}: {
+  apiKey: string;
+  fromEmail: string;
+  toEmail: string;
+  subject: string;
+  html: string;
+  genericErrorMessage: string;
+}): Promise<{ sent: boolean; reason?: string }> {
   try {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -237,9 +266,63 @@ async function sendGroupInviteEmail({
   } catch (error: any) {
     return {
       sent: false,
-      reason: error?.message || "Failed to contact invite email provider.",
+      reason: error?.message || genericErrorMessage,
     };
   }
+}
+
+async function sendPriceDropEmail({
+  toEmail,
+  toName,
+  itemName,
+  previousPrice,
+  latestPrice,
+  dashboardUrl,
+}: {
+  toEmail: string;
+  toName?: string;
+  itemName: string;
+  previousPrice: number;
+  latestPrice: number;
+  dashboardUrl: string;
+}): Promise<{ sent: boolean; reason?: string }> {
+  const apiKey = String(process.env.RESEND_API_KEY || "").trim();
+  const fromEmail = String(process.env.RESEND_FROM_EMAIL || "").trim();
+  if (!apiKey || !fromEmail) {
+    return {
+      sent: false,
+      reason: "Price-drop email provider is not configured (RESEND_API_KEY/RESEND_FROM_EMAIL).",
+    };
+  }
+
+  const safeName = toName || toEmail;
+  const safeItem = itemName || "an item";
+  const subject = `Price dropped: ${safeItem}`;
+  const html = `
+    <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111827">
+      <h2 style="margin-bottom:8px">Price drop alert</h2>
+      <p style="margin-top:0">Hi ${safeName},</p>
+      <p>
+        Good news — <strong>${safeItem}</strong> dropped in price:
+        <br />
+        <strong>$${previousPrice.toFixed(2)}</strong> → <strong>$${latestPrice.toFixed(2)}</strong>
+      </p>
+      <p>
+        Open your dashboard to review the item:
+        <br />
+        <a href="${dashboardUrl}" target="_blank" rel="noreferrer">${dashboardUrl}</a>
+      </p>
+    </div>
+  `;
+
+  return sendResendEmail({
+    apiKey,
+    fromEmail,
+    toEmail,
+    subject,
+    html,
+    genericErrorMessage: "Failed to contact price-drop email provider.",
+  });
 }
 
 function extractPriceFromJsonLdObject(node: any): number | null {
@@ -296,7 +379,7 @@ function extractPriceFromHtml(html: string): number | null {
     }
   }
 
-  const genericPriceMatch = html.match(/"price"\s*:\s*"?([0-9]+(?:\.[0-9]+)?)"?/i);
+  const genericPriceMatch = html.match(/"price"\s*:\s*"?([0-9][0-9,]*(?:\.[0-9]+)?)"?/i);
   if (genericPriceMatch?.[1]) {
     const fallbackPrice = parsePositivePrice(genericPriceMatch[1]);
     if (fallbackPrice != null) return fallbackPrice;
@@ -331,10 +414,11 @@ async function runPriceCheckCycle(): Promise<void> {
   try {
     const items = await pool.query(
       `
-      SELECT item_id, user_id, item_name, product_url, current_price
-      FROM cart_items
-      WHERE is_purchased = false AND product_url IS NOT NULL
-      ORDER BY item_id ASC
+      SELECT ci.item_id, ci.user_id, ci.item_name, ci.product_url, ci.current_price, u.email, u.username
+      FROM cart_items ci
+      JOIN users u ON u.user_id = ci.user_id
+      WHERE ci.is_purchased = false AND ci.product_url IS NOT NULL
+      ORDER BY ci.item_id ASC
       `
     );
 
@@ -344,6 +428,8 @@ async function runPriceCheckCycle(): Promise<void> {
       const itemName = String(row.item_name || "Item");
       const productUrl = String(row.product_url || "").trim();
       const previousPrice = Number(row.current_price || 0);
+      const userEmail = String(row.email || "").trim();
+      const username = String(row.username || "").trim();
 
       if (!productUrl) continue;
       const latestPrice = await fetchCurrentPriceFromProductUrl(productUrl);
@@ -373,6 +459,16 @@ async function runPriceCheckCycle(): Promise<void> {
             `Price dropped for ${itemName}: $${previousPrice.toFixed(2)} -> $${latestPrice.toFixed(2)}`,
           ]
         );
+        if (userEmail) {
+          await sendPriceDropEmail({
+            toEmail: userEmail,
+            toName: username || userEmail,
+            itemName,
+            previousPrice,
+            latestPrice,
+            dashboardUrl: `${getFrontendBaseUrl()}/dashboard`,
+          }).catch(() => {});
+        }
       }
     }
   } catch (error) {
@@ -1310,6 +1406,17 @@ app.patch(
             `Price dropped for ${previousItemName}: $${previousPrice.toFixed(2)} -> $${nextPrice.toFixed(2)}`,
           ]
         ).catch(() => {});
+        const ownerEmail = String(req.user?.email || "").trim();
+        if (ownerEmail) {
+          await sendPriceDropEmail({
+            toEmail: ownerEmail,
+            toName: ownerEmail,
+            itemName: previousItemName,
+            previousPrice,
+            latestPrice: nextPrice,
+            dashboardUrl: `${getFrontendBaseUrl()}/dashboard`,
+          }).catch(() => {});
+        }
       }
 
       return res.status(200).json({

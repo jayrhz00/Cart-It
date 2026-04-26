@@ -215,6 +215,15 @@ const Dashboard = () => {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const hexToRgba = (hex, alpha) => {
+    const cleaned = String(hex || "").replace("#", "");
+    if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) return `rgba(219, 128, 70, ${alpha})`;
+    const r = parseInt(cleaned.slice(0, 2), 16);
+    const g = parseInt(cleaned.slice(2, 4), 16);
+    const b = parseInt(cleaned.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+
   const renderWishlistCard = (list) => {
     const listId = list.group_id ?? list.id;
     const listName = list.group_name ?? list.name ?? "Untitled";
@@ -227,6 +236,12 @@ const Dashboard = () => {
     const isSelected = selectedGroupId === listId;
     const visibility = list.visibility || "Private";
     const collaborators = getCollaboratorCount(listId);
+    const tone = list.color || "#DB8046";
+    const cardStyle = {
+      "--wishlist-gradient-start": hexToRgba(tone, 0.16),
+      "--wishlist-gradient-end": hexToRgba(tone, 0.45),
+      "--wishlist-placeholder": hexToRgba(tone, 0.85),
+    };
 
     return (
       <button
@@ -234,6 +249,7 @@ const Dashboard = () => {
         className={`wishlist-card ${isSelected ? "wishlist-card-active" : ""}`}
         onClick={() => setSelectedGroupId(listId)}
         type="button"
+        style={cardStyle}
       >
         <div className="wishlist-mosaic" aria-hidden="true">
           {Array.from({ length: 4 }).map((_, idx) => {
@@ -268,17 +284,21 @@ const Dashboard = () => {
             <button className="sidebar-nav-item" type="button" onClick={() => jumpTo("topSection")}>
               <LuLayoutDashboard /> Dashboard
             </button>
-            <button className="sidebar-nav-item" type="button" onClick={() => jumpTo("cartSection")}>
+            <button className="sidebar-nav-item" type="button" onClick={() => navigate("/cart")}>
               <LuShoppingCart /> Cart
             </button>
-            <button className="sidebar-nav-item" type="button" onClick={() => jumpTo("analyticsSection")}>
+            <button className="sidebar-nav-item" type="button" onClick={() => navigate("/analytics")}>
               <LuChartArea /> Spending Analytics
             </button>
           </div>
 
           <div className="extension-card">
             <p className="extension-title">Get the Extension</p>
-            <button className="extension-btn">
+            <button
+              className="extension-btn"
+              type="button"
+              onClick={() => window.open("/extension-install.html", "_blank", "noopener,noreferrer")}
+            >
               <LuDownload size={14} /> Download
             </button>
           </div>

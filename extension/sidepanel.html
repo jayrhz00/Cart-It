@@ -155,6 +155,25 @@
       .new-cat-wrap button#createCatBtn {
         margin-top: 10px;
       }
+      .category-label-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .category-label-main {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .category-color-chip {
+        width: 16px;
+        height: 16px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.8);
+        background: linear-gradient(145deg, #f8fafc, #e2e8f0);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+      }
       .color-field {
         margin-top: 10px;
       }
@@ -236,7 +255,10 @@
         <option value="Shared">Shared wishlist</option>
       </select>
 
-      <label for="category">Category</label>
+      <label for="category" class="category-label-row">
+        <span class="category-label-main"><span aria-hidden="true">🎨</span> Category</span>
+        <span id="categoryColorChip" class="category-color-chip" aria-hidden="true"></span>
+      </label>
       <select id="category">
         <option value="">No category</option>
       </select>
@@ -271,6 +293,7 @@
       <textarea id="notes" placeholder="Sizing, color, reminders…"></textarea>
       <label for="manualPrice">Price (optional)</label>
       <input id="manualPrice" type="number" min="0" step="0.01" placeholder="Auto-detected from page" />
+      <div id="priceHint" style="margin-top:6px;font-size:12px;line-height:1.35;"></div>
       <button type="button" id="saveBtn">Save item</button>
       <div id="status"></div>
       <a id="viewWishlistLink" href="#" target="_blank" rel="noreferrer" hidden>See item in wishlist</a>
