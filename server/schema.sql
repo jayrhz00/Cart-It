@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS cart_items
     image_url TEXT,                                              -- Image of product
     store VARCHAR(100),                                          -- Store/website name (ex: Gymshark, Walmart)
     current_price NUMERIC(10,2),                                 -- Current price of item (changes over time)
+    is_in_stock BOOLEAN DEFAULT TRUE NOT NULL,                   -- Tracks current stock state from product page checks
     notes TEXT,                                                  -- Private internal notes (size, quality, etc.)
     is_purchased BOOLEAN DEFAULT FALSE NOT NULL,                 -- Tracks if user bought the item, Default = false cannot be NULL
     purchase_price NUMERIC(10,2),                                -- Price the user actually paid (if purchased)

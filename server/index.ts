@@ -325,6 +325,52 @@ async function sendPriceDropEmail({
   });
 }
 
+async function sendOutOfStockEmail({
+  toEmail,
+  toName,
+  itemName,
+  dashboardUrl,
+}: {
+  toEmail: string;
+  toName?: string;
+  itemName: string;
+  dashboardUrl: string;
+}): Promise<{ sent: boolean; reason?: string }> {
+  const apiKey = String(process.env.RESEND_API_KEY || "").trim();
+  const fromEmail = String(process.env.RESEND_FROM_EMAIL || "").trim();
+  if (!apiKey || !fromEmail) {
+    return {
+      sent: false,
+      reason: "Out-of-stock email provider is not configured (RESEND_API_KEY/RESEND_FROM_EMAIL).",
+    };
+  }
+
+  const safeName = toName || toEmail;
+  const safeItem = itemName || "an item";
+  const subject = `Out of stock: ${safeItem}`;
+  const html = `
+    <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111827">
+      <h2 style="margin-bottom:8px">Stock alert</h2>
+      <p style="margin-top:0">Hi ${safeName},</p>
+      <p><strong>${safeItem}</strong> is currently marked out of stock.</p>
+      <p>
+        Open your dashboard to review alternatives or keep tracking:
+        <br />
+        <a href="${dashboardUrl}" target="_blank" rel="noreferrer">${dashboardUrl}</a>
+      </p>
+    </div>
+  `;
+
+  return sendResendEmail({
+    apiKey,
+    fromEmail,
+    toEmail,
+    subject,
+    html,
+    genericErrorMessage: "Failed to contact out-of-stock email provider.",
+  });
+}
+
 function extractPriceFromJsonLdObject(node: any): number | null {
   if (!node || typeof node !== "object") return null;
   const offers = node.offers || node.aggregateOffer || null;
@@ -387,7 +433,44 @@ function extractPriceFromHtml(html: string): number | null {
   return null;
 }
 
-async function fetchCurrentPriceFromProductUrl(url: string): Promise<number | null> {
+function extractStockFromHtml(html: string): boolean | null {
+  const availabilityUrlMatch = html.match(
+    /"availability"\s*:\s*"(?:https?:\/\/schema\.org\/)?(InStock|OutOfStock|PreOrder|BackOrder|LimitedAvailability)"/i
+  );
+  if (availabilityUrlMatch?.[1]) {
+    const token = availabilityUrlMatch[1].toLowerCase();
+    if (token === "outofstock") return false;
+    return true;
+  }
+
+  const outOfStockPatterns = [
+    /\bout of stock\b/i,
+    /\bsold out\b/i,
+    /\bunavailable\b/i,
+    /\bcurrently unavailable\b/i,
+    /\btemporarily unavailable\b/i,
+    /\bnotify me when available\b/i,
+  ];
+  for (const re of outOfStockPatterns) {
+    if (re.test(html)) return false;
+  }
+
+  const inStockPatterns = [
+    /\bin stock\b/i,
+    /\bavailable now\b/i,
+    /\badd to cart\b/i,
+    /\bbuy now\b/i,
+  ];
+  for (const re of inStockPatterns) {
+    if (re.test(html)) return true;
+  }
+
+  return null;
+}
+
+async function fetchProductSnapshotFromUrl(
+  url: string
+): Promise<{ price: number | null; inStock: boolean | null }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12000);
   try {
@@ -400,11 +483,14 @@ async function fetchCurrentPriceFromProductUrl(url: string): Promise<number | nu
       },
       signal: controller.signal,
     });
-    if (!res.ok) return null;
+    if (!res.ok) return { price: null, inStock: null };
     const html = await res.text();
-    return extractPriceFromHtml(html);
+    return {
+      price: extractPriceFromHtml(html),
+      inStock: extractStockFromHtml(html),
+    };
   } catch {
-    return null;
+    return { price: null, inStock: null };
   } finally {
     clearTimeout(timeout);
   }
@@ -414,7 +500,7 @@ async function runPriceCheckCycle(): Promise<void> {
   try {
     const items = await pool.query(
       `
-      SELECT ci.item_id, ci.user_id, ci.item_name, ci.product_url, ci.current_price, u.email, u.username
+      SELECT ci.item_id, ci.user_id, ci.item_name, ci.product_url, ci.current_price, ci.is_in_stock, u.email, u.username
       FROM cart_items ci
       JOIN users u ON u.user_id = ci.user_id
       WHERE ci.is_purchased = false AND ci.product_url IS NOT NULL
@@ -428,11 +514,41 @@ async function runPriceCheckCycle(): Promise<void> {
       const itemName = String(row.item_name || "Item");
       const productUrl = String(row.product_url || "").trim();
       const previousPrice = Number(row.current_price || 0);
+      const previousInStock =
+        typeof row.is_in_stock === "boolean" ? row.is_in_stock : true;
       const userEmail = String(row.email || "").trim();
       const username = String(row.username || "").trim();
 
       if (!productUrl) continue;
-      const latestPrice = await fetchCurrentPriceFromProductUrl(productUrl);
+      const snapshot = await fetchProductSnapshotFromUrl(productUrl);
+      const latestPrice = snapshot.price;
+      const latestInStock = snapshot.inStock;
+
+      if (latestInStock !== null && latestInStock !== previousInStock) {
+        await pool.query(
+          `UPDATE cart_items SET is_in_stock = $1 WHERE item_id = $2`,
+          [latestInStock, itemId]
+        );
+      }
+
+      if (latestInStock === false && previousInStock === true) {
+        await pool.query(
+          `
+          INSERT INTO notifications (user_id, item_id, message, is_read)
+          VALUES ($1, $2, $3, false)
+          `,
+          [userId, itemId, `${itemName} is currently out of stock.`]
+        ).catch(() => {});
+        if (userEmail) {
+          await sendOutOfStockEmail({
+            toEmail: userEmail,
+            toName: username || userEmail,
+            itemName,
+            dashboardUrl: `${getFrontendBaseUrl()}/dashboard`,
+          }).catch(() => {});
+        }
+      }
+
       if (latestPrice == null) continue;
 
       const changed = Math.abs(latestPrice - previousPrice) >= 0.01;
@@ -490,6 +606,9 @@ async function initializeDatabase(): Promise<void> {
     const schemaPath = path.join(__dirname, "schema.sql");
     const schemaSql = await fs.readFile(schemaPath, "utf-8");
     await pool.query(schemaSql);
+    await pool.query(
+      `ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS is_in_stock BOOLEAN DEFAULT true NOT NULL`
+    );
     console.log("Database schema initialized successfully");
   } catch (error) {
     console.error("Database schema initialization failed:", error);
