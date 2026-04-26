@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS cart_items
     current_price NUMERIC(10,2),                                 -- Current price of item (changes over time)
     is_in_stock BOOLEAN DEFAULT TRUE NOT NULL,                   -- Tracks current stock state from product page checks
     notes TEXT,                                                  -- Private internal notes (size, quality, etc.)
+    group_comments TEXT,                                         -- Shared notes visible to all collaborators on this wishlist
     is_purchased BOOLEAN DEFAULT FALSE NOT NULL,                 -- Tracks if user bought the item, Default = false cannot be NULL
     purchase_price NUMERIC(10,2),                                -- Price the user actually paid (if purchased)
     purchase_date TIMESTAMP,                                     -- When item was purchased
@@ -120,6 +121,36 @@ CREATE TABLE IF NOT EXISTS cart_items
     CONSTRAINT chk_cart_items_purchase_price
         CHECK (purchase_price IS NULL OR purchase_price >= 0)
 );
+
+-- Per-user private notes for a cart item (not visible to other collaborators)
+CREATE TABLE IF NOT EXISTS item_private_notes
+(
+    item_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    body TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT fk_item_private_notes_item
+        FOREIGN KEY (item_id) REFERENCES cart_items(item_id) ON DELETE CASCADE,
+    CONSTRAINT fk_item_private_notes_user
+        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    PRIMARY KEY (item_id, user_id)
+);
+
+-- Shared thread: comments on an item visible to everyone with access to the wishlist
+CREATE TABLE IF NOT EXISTS item_group_comments
+(
+    comment_id SERIAL PRIMARY KEY,
+    item_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    body TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT fk_item_group_comments_item
+        FOREIGN KEY (item_id) REFERENCES cart_items(item_id) ON DELETE CASCADE,
+    CONSTRAINT fk_item_group_comments_user
+        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_item_group_comments_item ON item_group_comments(item_id);
 
 -- TABLE 5: price_history 
 -- Stores past price records for each saved item 

@@ -1,8 +1,10 @@
-// Jessie Hernandez 700775688
-// Cart-It Storage 
-// This file manages storing and retrieving all data
-// *REMINDER* schema.ts is the blueprint of what the data will look like 
-// *REMINDER* storage.ts is the warehouse. This is where the data lives and how it gets in and out
+// Cart-It storage layer
+// ---------------------------------------------------------------------------
+// STUDENT NOTES:
+// - This file is the "data access layer" between routes (index.ts) and PostgreSQL.
+// - `index.ts` should call functions here instead of writing duplicate SQL everywhere.
+// - If frontend asks for users/groups/items, routes call storage methods, which query DB.
+// - `schema.ts` defines TS shapes; this file performs actual reads/writes.
 
 
 

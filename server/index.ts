@@ -94,6 +94,7 @@ interface UpdateCartItemBody {
   image_url?: string | null;
   store?: string | null;
   current_price?: number;
+  /** Saved only for the authenticated user (item_private_notes). */
   notes?: string | null;
   is_purchased?: boolean;
   purchase_price?: number | null;
@@ -206,6 +207,67 @@ function getFrontendBaseUrl(): string {
   return raw.replace(/\/+$/, "");
 }
 
+async function userCanAccessGroup(userId: number, groupId: number): Promise<boolean> {
+  const r = await pool.query(
+    `
+    SELECT 1
+    FROM groups g
+    WHERE g.group_id = $1
+      AND (
+        g.owner_id = $2
+        OR EXISTS (
+          SELECT 1 FROM group_members gm
+          WHERE gm.group_id = g.group_id AND gm.user_id = $2
+        )
+      )
+    LIMIT 1
+    `,
+    [groupId, userId]
+  );
+  return r.rows.length > 0;
+}
+
+async function userCanEditCartItemRow(
+  editorUserId: number,
+  row: { user_id: number; group_id: number | null }
+): Promise<boolean> {
+  if (row.user_id === editorUserId) return true;
+  if (row.group_id == null) return false;
+  return userCanAccessGroup(editorUserId, Number(row.group_id));
+}
+
+async function upsertPrivateNoteForItem(
+  itemId: number,
+  userId: number,
+  notes: string | null
+): Promise<void> {
+  const trimmed = notes == null ? "" : String(notes).trim();
+  if (!trimmed) {
+    await pool.query(
+      `DELETE FROM item_private_notes WHERE item_id = $1 AND user_id = $2`,
+      [itemId, userId]
+    );
+    return;
+  }
+  await pool.query(
+    `
+    INSERT INTO item_private_notes (item_id, user_id, body, updated_at)
+    VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+    ON CONFLICT (item_id, user_id) DO UPDATE
+    SET body = EXCLUDED.body, updated_at = CURRENT_TIMESTAMP
+    `,
+    [itemId, userId, trimmed]
+  );
+}
+
+function escapeHtml(raw: string): string {
+  return raw
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 async function sendGroupInviteEmail({
   toEmail,
   toName,
@@ -263,6 +325,7 @@ async function sendResendEmail({
   toEmail,
   subject,
   html,
+  text,
   genericErrorMessage,
 }: {
   apiKey: string;
@@ -270,21 +333,26 @@ async function sendResendEmail({
   toEmail: string;
   subject: string;
   html: string;
+  text?: string;
   genericErrorMessage: string;
 }): Promise<{ sent: boolean; reason?: string }> {
   try {
+    const payload: Record<string, unknown> = {
+      from: fromEmail,
+      to: [toEmail],
+      subject,
+      html,
+    };
+    if (text && text.trim()) {
+      payload.text = text;
+    }
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        from: fromEmail,
-        to: [toEmail],
-        subject,
-        html,
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
@@ -421,22 +489,48 @@ async function sendPasswordResetEmail({
       reason: "Password reset email provider is not configured (RESEND_API_KEY/RESEND_FROM_EMAIL).",
     };
   }
-  const safeName = toName || toEmail;
+  const safeNameHtml = escapeHtml(toName || toEmail);
+  const safeNameText = toName || toEmail;
   const html = `
-    <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111827">
-      <h2 style="margin-bottom:8px">Reset your Cart-It password</h2>
-      <p style="margin-top:0">Hi ${safeName},</p>
-      <p>Use the link below to set a new password. This link expires in ${RESET_PASSWORD_EXP_MINUTES} minutes.</p>
-      <p><a href="${resetUrl}" target="_blank" rel="noreferrer">${resetUrl}</a></p>
-      <p style="color:#6b7280;font-size:13px">If you did not request this, you can ignore this email.</p>
+    <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.55;color:#111827;max-width:520px">
+      <h2 style="margin:0 0 8px;font-size:20px">Reset your Cart-It password</h2>
+      <p style="margin:0 0 12px">Hi ${safeNameHtml},</p>
+      <p style="margin:0 0 16px">Tap the button below to choose a new password. It expires in <strong>${RESET_PASSWORD_EXP_MINUTES} minutes</strong>.</p>
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px">
+        <tr>
+          <td style="border-radius:10px;background:#ea580c">
+            <a href="${resetUrl}" target="_blank" rel="noopener noreferrer"
+              style="display:inline-block;padding:14px 22px;font-weight:700;font-size:15px;color:#ffffff;text-decoration:none">
+              Reset my password
+            </a>
+          </td>
+        </tr>
+      </table>
+      <p style="margin:0 0 6px;font-size:13px;color:#6b7280">If the button does not open, use this link (tap or copy the whole line):</p>
+      <p style="margin:0 0 20px;font-size:13px;word-break:break-all;line-height:1.4">
+        <a href="${resetUrl}" style="color:#c2410c;font-weight:600" target="_blank" rel="noopener noreferrer">${resetUrl}</a>
+      </p>
+      <p style="margin:0;font-size:13px;color:#6b7280">If you did not ask to reset your password, you can ignore this email.</p>
     </div>
   `;
+  const text = [
+    `Hi ${safeNameText},`,
+    ``,
+    `Reset your Cart-It password by opening this link in your browser. Copy the entire URL on the next line if it is not clickable:`,
+    ``,
+    resetUrl,
+    ``,
+    `This link expires in ${RESET_PASSWORD_EXP_MINUTES} minutes.`,
+    ``,
+    `If you did not request this, ignore this email.`,
+  ].join("\n");
   return sendResendEmail({
     apiKey,
     fromEmail,
     toEmail,
     subject: "Reset your Cart-It password",
     html,
+    text,
     genericErrorMessage: "Failed to contact password-reset email provider.",
   });
 }
@@ -681,6 +775,44 @@ async function initializeDatabase(): Promise<void> {
     await pool.query(
       `ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS is_in_stock BOOLEAN DEFAULT true NOT NULL`
     );
+    await pool.query(
+      `ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS group_comments TEXT`
+    );
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS item_private_notes (
+        item_id INTEGER NOT NULL REFERENCES cart_items(item_id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+        body TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        PRIMARY KEY (item_id, user_id)
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS item_group_comments (
+        comment_id SERIAL PRIMARY KEY,
+        item_id INTEGER NOT NULL REFERENCES cart_items(item_id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+        body TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+      )
+    `);
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_item_group_comments_item ON item_group_comments(item_id)`
+    );
+    await pool.query(`
+      INSERT INTO item_private_notes (item_id, user_id, body, updated_at)
+      SELECT ci.item_id, ci.user_id, ci.notes, ci.created_at
+      FROM cart_items ci
+      WHERE ci.notes IS NOT NULL AND LENGTH(TRIM(ci.notes)) > 0
+      ON CONFLICT (item_id, user_id) DO NOTHING
+    `);
+    await pool.query(`
+      INSERT INTO item_group_comments (item_id, user_id, body)
+      SELECT ci.item_id, ci.user_id, TRIM(ci.group_comments)
+      FROM cart_items ci
+      WHERE ci.group_comments IS NOT NULL AND LENGTH(TRIM(ci.group_comments)) > 0
+        AND NOT EXISTS (SELECT 1 FROM item_group_comments c WHERE c.item_id = ci.item_id)
+    `);
     console.log("Database schema initialized successfully");
   } catch (error) {
     console.error("Database schema initialization failed:", error);
@@ -972,14 +1104,27 @@ app.get("/api/me", authenticateToken, async (req: AuthRequest, res: Response) =>
 // - Wishlist page calls /api/groups/:id for one list and /api/groups/:id/invite for collaboration.
 // - Create modal on dashboard calls POST /api/groups.
 
-// GET all groups that belong to a user that is logged in
+// GET groups you own plus shared lists where you are a collaborator
 app.get("/api/groups", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const owner_id = req.user!.userId;
-
-    const groups = await storage.getGroupsByOwner(owner_id);
-
-    return res.status(200).json(groups);
+    const userId = req.user!.userId;
+    const result = await pool.query(
+      `
+      SELECT * FROM (
+        SELECT g.*, 'Owner'::text AS access_role
+        FROM groups g
+        WHERE g.owner_id = $1
+        UNION ALL
+        SELECT g.*, gm.role::text AS access_role
+        FROM groups g
+        INNER JOIN group_members gm ON gm.group_id = g.group_id AND gm.user_id = $1
+        WHERE g.owner_id <> $1
+      ) AS combined
+      ORDER BY combined.created_at DESC
+      `,
+      [userId]
+    );
+    return res.status(200).json(result.rows);
   } catch (error) {
     console.error("Get groups failed:", error);
 
@@ -989,17 +1134,41 @@ app.get("/api/groups", authenticateToken, async (req: AuthRequest, res: Response
   }
 });
 
-// GET one group by id (must belong to the logged-in user)
+// GET one group if you own it or are a collaborator
 app.get("/api/groups/:id", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const group_id = Number(req.params.id);
-    const owner_id = req.user!.userId;
+    const userId = req.user!.userId;
     if (isNaN(group_id)) {
       return res.status(400).json({ message: "Invalid group ID" });
     }
     const result = await pool.query(
-      `SELECT * FROM groups WHERE group_id = $1 AND owner_id = $2`,
-      [group_id, owner_id]
+      `
+      SELECT
+        g.*,
+        CASE
+          WHEN g.owner_id = $2 THEN 'Owner'
+          ELSE COALESCE(
+            (
+              SELECT gm.role::text
+              FROM group_members gm
+              WHERE gm.group_id = g.group_id AND gm.user_id = $2
+              LIMIT 1
+            ),
+            'Editor'
+          )
+        END AS access_role
+      FROM groups g
+      WHERE g.group_id = $1
+        AND (
+          g.owner_id = $2
+          OR EXISTS (
+            SELECT 1 FROM group_members gm
+            WHERE gm.group_id = g.group_id AND gm.user_id = $2
+          )
+        )
+      `,
+      [group_id, userId]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ message: "Category not found" });
@@ -1183,38 +1352,87 @@ app.get("/api/users", authenticateToken, async (req: AuthRequest, res: Response)
 
 app.get("/api/cart-items", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const owner_id = req.user!.userId;
+    const userId = req.user!.userId;
     const rawQ = req.query.group_id;
     const groupIdStr =
       typeof rawQ === "string" ? rawQ : Array.isArray(rawQ) ? rawQ[0] : undefined;
-
-    const params: number[] = [owner_id];
-    let filter = "";
 
     if (groupIdStr !== undefined && groupIdStr !== "") {
       const gid = Number(groupIdStr);
       if (isNaN(gid)) {
         return res.status(400).json({ message: "Invalid group_id query" });
       }
-      const own = await pool.query(
-        `SELECT 1 FROM groups WHERE group_id = $1 AND owner_id = $2`,
-        [gid, owner_id]
-      );
-      if (own.rows.length === 0) {
+      const ok = await userCanAccessGroup(userId, gid);
+      if (!ok) {
         return res.status(404).json({ message: "Category not found" });
       }
-      params.push(gid);
-      filter = ` AND group_id = $${params.length}`;
+      const result = await pool.query(
+        `
+        SELECT
+          ci.item_id,
+          ci.user_id,
+          ci.group_id,
+          ci.item_name,
+          ci.product_url,
+          ci.image_url,
+          ci.store,
+          ci.current_price,
+          ci.is_in_stock,
+          ci.is_purchased,
+          ci.purchase_price,
+          ci.purchase_date,
+          ci.created_at,
+          COALESCE(ipn.body, ci.notes) AS notes
+        FROM cart_items ci
+        LEFT JOIN item_private_notes ipn ON ipn.item_id = ci.item_id AND ipn.user_id = $1
+        WHERE ci.group_id = $2
+        ORDER BY ci.item_id DESC
+        `,
+        [userId, gid]
+      );
+      return res.status(200).json(result.rows);
     }
 
     const result = await pool.query(
       `
-      SELECT *
-      FROM cart_items
-      WHERE user_id = $1${filter}
-      ORDER BY item_id DESC
+      WITH visible AS (
+        SELECT ci.*
+        FROM cart_items ci
+        WHERE ci.user_id = $1
+           OR (
+             ci.group_id IS NOT NULL
+             AND (
+               EXISTS (
+                 SELECT 1 FROM groups g
+                 WHERE g.group_id = ci.group_id AND g.owner_id = $1
+               )
+               OR EXISTS (
+                 SELECT 1 FROM group_members gm
+                 WHERE gm.group_id = ci.group_id AND gm.user_id = $1
+               )
+             )
+           )
+      )
+      SELECT
+        v.item_id,
+        v.user_id,
+        v.group_id,
+        v.item_name,
+        v.product_url,
+        v.image_url,
+        v.store,
+        v.current_price,
+        v.is_in_stock,
+        v.is_purchased,
+        v.purchase_price,
+        v.purchase_date,
+        v.created_at,
+        COALESCE(ipn.body, v.notes) AS notes
+      FROM visible v
+      LEFT JOIN item_private_notes ipn ON ipn.item_id = v.item_id AND ipn.user_id = $1
+      ORDER BY v.item_id DESC
       `,
-      params
+      [userId]
     );
     res.status(200).json(result.rows);
   } catch (error) {
@@ -1235,13 +1453,14 @@ app.get("/api/dashboard", authenticateToken, async (req: AuthRequest, res: Respo
         ci.store,
         ci.current_price,
         ci.is_purchased,
-        ci.notes,
+        COALESCE(ipn.body, ci.notes) AS notes,
         u.username,
         COALESCE(g.group_name, 'No Group') AS group_name,
         g.color AS group_color
       FROM cart_items ci
       JOIN users u ON ci.user_id = u.user_id
       LEFT JOIN groups g ON ci.group_id = g.group_id
+      LEFT JOIN item_private_notes ipn ON ipn.item_id = ci.item_id AND ipn.user_id = $1
       WHERE ci.user_id = $1
       ORDER BY ci.item_id ASC;
     `, [owner_id]);
@@ -1519,13 +1738,23 @@ app.post(
       if (Number.isNaN(gid)) {
         return res.status(400).json({ message: "Invalid category id" });
       }
-      const own = await pool.query(
-        `SELECT group_id FROM groups WHERE group_id = $1 AND owner_id = $2`,
+      const access = await pool.query(
+        `
+        SELECT 1 FROM groups g
+        WHERE g.group_id = $1
+          AND (
+            g.owner_id = $2
+            OR EXISTS (
+              SELECT 1 FROM group_members gm
+              WHERE gm.group_id = g.group_id AND gm.user_id = $2
+            )
+          )
+        `,
         [gid, user_id]
       );
-      if (own.rows.length === 0) {
+      if (access.rows.length === 0) {
         return res.status(400).json({
-          message: "That category does not belong to your account.",
+          message: "That category does not exist or you cannot save to it.",
         });
       }
       resolvedGroupId = gid;
@@ -1536,7 +1765,7 @@ app.post(
       `
       INSERT INTO cart_items 
       (user_id, group_id, item_name, product_url, image_url, store, current_price, is_in_stock, notes, is_purchased)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, false)
       RETURNING item_id
       `,
       [
@@ -1548,13 +1777,16 @@ app.post(
         store ?? null,
         priceNum,
         is_in_stock === false ? false : true,
-        notes || null,
       ]
     );
 
     // STEP 4: Get the new item's ID
     // PostgreSQL returns the new item_id so we can use it next
     const newItemId = itemResult.rows[0].item_id;
+
+    if (notes !== undefined && notes !== null && String(notes).trim() !== "") {
+      await upsertPrivateNoteForItem(newItemId, user_id, String(notes));
+    }
 
     // STEP 5: Insert into price_history
     // This starts tracking the item's price over time
@@ -1645,10 +1877,6 @@ app.patch(
         fieldsToUpdate.push(`current_price = $${valueIndex++}`);
         values.push(current_price);
       }
-      if (notes !== undefined) {
-        fieldsToUpdate.push(`notes = $${valueIndex++}`);
-        values.push(notes);
-      }
       if (is_purchased !== undefined) {
         fieldsToUpdate.push(`is_purchased = $${valueIndex++}`);
         values.push(is_purchased);
@@ -1663,15 +1891,9 @@ app.patch(
         values.push(purchase_price);
       }
 
-      if (fieldsToUpdate.length === 0) {
-        return res.status(400).json({
-          message: "No valid fields were provided for update",
-        });
-      }
-
       const ownerCheck = await pool.query(
         `
-        SELECT user_id, current_price, item_name
+        SELECT user_id, group_id, current_price, item_name
         FROM cart_items
         WHERE item_id = $1
         `,
@@ -1682,60 +1904,94 @@ app.patch(
         return res.status(404).json({ message: "Item not found" });
       }
 
-      if (ownerCheck.rows[0].user_id !== owner_id) {
+      const canEdit = await userCanEditCartItemRow(owner_id, {
+        user_id: ownerCheck.rows[0].user_id,
+        group_id: ownerCheck.rows[0].group_id,
+      });
+      if (!canEdit) {
         return res.status(403).json({ message: "You cannot update this item" });
+      }
+
+      let savedPrivateNotes = false;
+      if (notes !== undefined) {
+        await upsertPrivateNoteForItem(item_id, owner_id, notes);
+        savedPrivateNotes = true;
+      }
+
+      if (fieldsToUpdate.length === 0 && !savedPrivateNotes) {
+        return res.status(400).json({
+          message: "No valid fields were provided for update",
+        });
       }
 
       const previousPrice = Number(ownerCheck.rows[0].current_price ?? 0);
       const previousItemName = String(ownerCheck.rows[0].item_name || "Item");
 
-      values.push(item_id);
-      // Update only the fields supplied by frontend (partial update behavior).
-      const result = await pool.query(
-        `
-        UPDATE cart_items
-        SET ${fieldsToUpdate.join(", ")}
-        WHERE item_id = $${valueIndex}
-        RETURNING *
-        `
-      , values);
-
-      if (result.rows.length === 0) {
-        return res.status(404).json({ message: "Item not found" });
-      }
-
-      const nextPrice =
-        current_price !== undefined && Number.isFinite(Number(current_price))
-          ? Number(current_price)
-          : previousPrice;
-      if (current_price !== undefined && nextPrice < previousPrice) {
-        await pool.query(
+      let updatedRow: Record<string, unknown>;
+      if (fieldsToUpdate.length > 0) {
+        values.push(item_id);
+        const result = await pool.query(
           `
-          INSERT INTO notifications (user_id, item_id, message, is_read)
-          VALUES ($1, $2, $3, false)
+          UPDATE cart_items
+          SET ${fieldsToUpdate.join(", ")}
+          WHERE item_id = $${valueIndex}
+          RETURNING *
           `,
-          [
-            owner_id,
-            item_id,
-            `Price dropped for ${previousItemName}: $${previousPrice.toFixed(2)} -> $${nextPrice.toFixed(2)}`,
-          ]
-        ).catch(() => {});
-        const ownerEmail = String(req.user?.email || "").trim();
-        if (ownerEmail) {
-          await sendPriceDropEmail({
-            toEmail: ownerEmail,
-            toName: ownerEmail,
-            itemName: previousItemName,
-            previousPrice,
-            latestPrice: nextPrice,
-            dashboardUrl: `${getFrontendBaseUrl()}/dashboard`,
-          }).catch(() => {});
+          values
+        );
+
+        if (result.rows.length === 0) {
+          return res.status(404).json({ message: "Item not found" });
         }
+        updatedRow = result.rows[0];
+
+        const nextPrice =
+          current_price !== undefined && Number.isFinite(Number(current_price))
+            ? Number(current_price)
+            : previousPrice;
+        if (current_price !== undefined && nextPrice < previousPrice) {
+          const itemOwnerId = ownerCheck.rows[0].user_id;
+          await pool.query(
+            `
+            INSERT INTO notifications (user_id, item_id, message, is_read)
+            VALUES ($1, $2, $3, false)
+            `,
+            [
+              itemOwnerId,
+              item_id,
+              `Price dropped for ${previousItemName}: $${previousPrice.toFixed(2)} -> $${nextPrice.toFixed(2)}`,
+            ]
+          ).catch(() => {});
+          const notifyUser = await storage.getUser(itemOwnerId);
+          const ownerEmail = String(notifyUser?.email || "").trim();
+          if (ownerEmail) {
+            await sendPriceDropEmail({
+              toEmail: ownerEmail,
+              toName: notifyUser?.username || ownerEmail,
+              itemName: previousItemName,
+              previousPrice,
+              latestPrice: nextPrice,
+              dashboardUrl: `${getFrontendBaseUrl()}/dashboard`,
+            }).catch(() => {});
+          }
+        }
+      } else {
+        const full = await pool.query(`SELECT * FROM cart_items WHERE item_id = $1`, [item_id]);
+        updatedRow = full.rows[0];
       }
+
+      const noteRow = await pool.query(
+        `SELECT body AS notes FROM item_private_notes WHERE item_id = $1 AND user_id = $2`,
+        [item_id, owner_id]
+      );
+      const mergedItem = {
+        ...updatedRow,
+        notes: noteRow.rows[0]?.notes ?? null,
+      };
 
       return res.status(200).json({
         message: "Item updated successfully",
-        item: result.rows[0],
+        item: mergedItem,
       });
     } catch (error) {
       console.error("Update item failed:", error);
@@ -1757,7 +2013,7 @@ app.delete("/api/cart-items/:id", authenticateToken, async (req: AuthRequest<any
 
     const ownerCheck = await pool.query(
       `
-      SELECT user_id
+      SELECT user_id, group_id
       FROM cart_items
       WHERE item_id = $1
       `,
@@ -1770,7 +2026,11 @@ app.delete("/api/cart-items/:id", authenticateToken, async (req: AuthRequest<any
       });
     }
 
-    if (ownerCheck.rows[0].user_id !== owner_id) {
+    const canDelete = await userCanEditCartItemRow(owner_id, {
+      user_id: ownerCheck.rows[0].user_id,
+      group_id: ownerCheck.rows[0].group_id,
+    });
+    if (!canDelete) {
       return res.status(403).json({
         message: "You cannot delete this item",
       });
@@ -1803,6 +2063,108 @@ app.delete("/api/cart-items/:id", authenticateToken, async (req: AuthRequest<any
   }
 });
 
+app.get(
+  "/api/cart-items/:id/group-comments",
+  authenticateToken,
+  async (req: AuthRequest<any, { id: string }>, res: Response) => {
+    try {
+      const item_id = Number(req.params.id);
+      const userId = req.user!.userId;
+      if (isNaN(item_id)) {
+        return res.status(400).json({ message: "Invalid item ID" });
+      }
+
+      const row = await pool.query(
+        `SELECT user_id, group_id FROM cart_items WHERE item_id = $1`,
+        [item_id]
+      );
+      if (row.rows.length === 0) {
+        return res.status(404).json({ message: "Item not found" });
+      }
+      const canView = await userCanEditCartItemRow(userId, {
+        user_id: row.rows[0].user_id,
+        group_id: row.rows[0].group_id,
+      });
+      if (!canView) {
+        return res.status(403).json({ message: "You cannot view comments for this item" });
+      }
+
+      const thread = await pool.query(
+        `
+        SELECT
+          c.comment_id,
+          c.item_id,
+          c.user_id,
+          c.body,
+          c.created_at,
+          u.username,
+          u.email
+        FROM item_group_comments c
+        JOIN users u ON u.user_id = c.user_id
+        WHERE c.item_id = $1
+        ORDER BY c.created_at ASC, c.comment_id ASC
+        `,
+        [item_id]
+      );
+      return res.status(200).json(thread.rows);
+    } catch (error) {
+      console.error("Fetch group comments failed:", error);
+      return res.status(500).json({ message: "Failed to fetch group comments" });
+    }
+  }
+);
+
+app.post(
+  "/api/cart-items/:id/group-comments",
+  authenticateToken,
+  async (req: AuthRequest<{ body?: string }, { id: string }>, res: Response) => {
+    try {
+      const item_id = Number(req.params.id);
+      const userId = req.user!.userId;
+      const text = String(req.body?.body ?? "").trim();
+      if (isNaN(item_id)) {
+        return res.status(400).json({ message: "Invalid item ID" });
+      }
+      if (!text) {
+        return res.status(400).json({ message: "Comment text is required" });
+      }
+
+      const row = await pool.query(
+        `SELECT user_id, group_id FROM cart_items WHERE item_id = $1`,
+        [item_id]
+      );
+      if (row.rows.length === 0) {
+        return res.status(404).json({ message: "Item not found" });
+      }
+      const canPost = await userCanEditCartItemRow(userId, {
+        user_id: row.rows[0].user_id,
+        group_id: row.rows[0].group_id,
+      });
+      if (!canPost) {
+        return res.status(403).json({ message: "You cannot comment on this item" });
+      }
+
+      const ins = await pool.query(
+        `
+        INSERT INTO item_group_comments (item_id, user_id, body)
+        VALUES ($1, $2, $3)
+        RETURNING comment_id, item_id, user_id, body, created_at
+        `,
+        [item_id, userId, text]
+      );
+      const who = await storage.getUser(userId);
+      return res.status(201).json({
+        ...ins.rows[0],
+        username: who?.username ?? null,
+        email: who?.email ?? null,
+      });
+    } catch (error) {
+      console.error("Post group comment failed:", error);
+      return res.status(500).json({ message: "Failed to post comment" });
+    }
+  }
+);
+
 app.get("/api/cart-items/:id/notes", authenticateToken, async (req: AuthRequest<any, { id: string }>, res: Response) => {
   try {
     const item_id = Number(req.params.id);
@@ -1813,18 +2175,23 @@ app.get("/api/cart-items/:id/notes", authenticateToken, async (req: AuthRequest<
 
     const result = await pool.query(
       `
-      SELECT item_id, user_id, notes
-      FROM cart_items
-      WHERE item_id = $1
+      SELECT ci.item_id, ci.user_id, ci.group_id, COALESCE(ipn.body, ci.notes) AS notes
+      FROM cart_items ci
+      LEFT JOIN item_private_notes ipn ON ipn.item_id = ci.item_id AND ipn.user_id = $2
+      WHERE ci.item_id = $1
       `,
-      [item_id]
+      [item_id, owner_id]
     );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: "Item not found" });
     }
 
-    if (result.rows[0].user_id !== owner_id) {
+    const canView = await userCanEditCartItemRow(owner_id, {
+      user_id: result.rows[0].user_id,
+      group_id: result.rows[0].group_id,
+    });
+    if (!canView) {
       return res.status(403).json({ message: "You cannot view notes for this item" });
     }
 
@@ -1856,7 +2223,7 @@ app.patch(
 
       const ownerCheck = await pool.query(
         `
-        SELECT user_id
+        SELECT user_id, group_id
         FROM cart_items
         WHERE item_id = $1
         `,
@@ -1867,27 +2234,27 @@ app.patch(
         return res.status(404).json({ message: "Item not found" });
       }
 
-      if (ownerCheck.rows[0].user_id !== owner_id) {
+      const canEditNotes = await userCanEditCartItemRow(owner_id, {
+        user_id: ownerCheck.rows[0].user_id,
+        group_id: ownerCheck.rows[0].group_id,
+      });
+      if (!canEditNotes) {
         return res.status(403).json({ message: "You cannot update notes for this item" });
       }
 
-      const result = await pool.query(
-        `
-        UPDATE cart_items
-        SET notes = $1
-        WHERE item_id = $2
-        RETURNING item_id, notes
-        `,
-        [notes, item_id]
-      );
+      await upsertPrivateNoteForItem(item_id, owner_id, notes);
 
-      if (result.rows.length === 0) {
-        return res.status(404).json({ message: "Item not found" });
-      }
+      const readBack = await pool.query(
+        `SELECT body AS notes FROM item_private_notes WHERE item_id = $1 AND user_id = $2`,
+        [item_id, owner_id]
+      );
 
       return res.status(200).json({
         message: "Item notes updated successfully",
-        item: result.rows[0],
+        item: {
+          item_id,
+          notes: readBack.rows[0]?.notes ?? null,
+        },
       });
     } catch (error) {
       console.error("Update item notes failed:", error);

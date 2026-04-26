@@ -31,9 +31,9 @@ const PrivacyPolicy = () => {
           </li>
           <li>
             <strong>Wishlist and product data:</strong> items you save may include product titles, store or
-            site names, product page URLs, image URLs, prices, stock or notes you add, and which list or group
-            they belong to. If you use shared lists, that content may be visible to people you invite,
-            according to your settings.
+            site names, product page URLs, image URLs, prices, stock, private notes you add per item, group
+            comments you post on shared lists, and which list or group they belong to. If you use shared lists,
+            group comments and list contents may be visible to people you invite, according to your settings.
           </li>
           <li>
             <strong>Browser extension:</strong> the extension may read information from the active tab (such as

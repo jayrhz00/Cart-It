@@ -173,6 +173,16 @@
         <h3>cart-It</h3>
       </div>
       <p id="authStatus" class="hint"></p>
+
+      <div id="signInWrap">
+        <label for="signInEmail">Email</label>
+        <input id="signInEmail" type="email" autocomplete="username" />
+        <label for="signInPassword">Password</label>
+        <input id="signInPassword" type="password" autocomplete="current-password" />
+        <button type="button" id="signInBtn" class="secondary">Sign in</button>
+        <button type="button" id="createAccountBtn" class="link-btn">Create account (opens browser)</button>
+      </div>
+
       <p id="tabHint" aria-live="polite"></p>
 
       <label for="listScope">Save to</label>
@@ -202,11 +212,14 @@
       <a id="viewWishlistLink" href="#" target="_blank" rel="noreferrer" hidden>See item in wishlist</a>
 
       <details>
-        <summary>Advanced — API base URL</summary>
+        <summary>Advanced — API &amp; web app URL</summary>
+        <label for="webAppOrigin">Web app (for links)</label>
+        <input id="webAppOrigin" type="text" placeholder="https://cart-it.pages.dev" autocomplete="off" />
         <label for="apiBase">API (Express)</label>
-        <input id="apiBase" type="text" placeholder="http://127.0.0.1:5001" autocomplete="off" />
+        <input id="apiBase" type="text" placeholder="https://cart-it.onrender.com" autocomplete="off" />
       </details>
     </div>
+    <script src="config.js"></script>
     <script src="panel.js"></script>
   </body>
 </html>

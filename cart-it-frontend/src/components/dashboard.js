@@ -34,12 +34,15 @@ const Dashboard = () => {
   const [inviteStatus, setInviteStatus] = useState("");
 
   const reloadDashboardData = async () => {
-    const [groupData, itemData, memberData, notificationData] = await Promise.all([
+    const [meData, groupData, itemData, memberData, notificationData] = await Promise.all([
+      apiRequest('/api/me'),
       apiRequest('/api/groups'),
       apiRequest('/api/cart-items'),
       apiRequest('/api/group-members').catch(() => []),
       apiRequest('/api/notifications').catch(() => []),
     ]);
+    setUser(meData.user);
+    localStorage.setItem('user', JSON.stringify(meData.user));
     setWishlists(groupData);
     setCartItems(itemData);
     setGroupMembers(Array.isArray(memberData) ? memberData : []);
@@ -230,12 +233,17 @@ const Dashboard = () => {
     selectedGroupId == null
       ? []
       : cartItems.filter((item) => item.group_id === selectedGroupId);
-  const privateWishlists = wishlists.filter(
-    (list) => String(list.visibility || "Private").toLowerCase() !== "shared"
-  );
-  const sharedWishlists = wishlists.filter(
-    (list) => String(list.visibility || "").toLowerCase() === "shared"
-  );
+  const myId = user?.userId;
+  const privateWishlists = wishlists.filter((list) => {
+    if (myId != null && list.owner_id != null && list.owner_id !== myId) return false;
+    return String(list.visibility || "Private").toLowerCase() !== "shared";
+  });
+  const sharedWishlists = wishlists.filter((list) => {
+    if (String(list.visibility || "").toLowerCase() !== "shared") return false;
+    if (myId == null) return true;
+    if (list.owner_id === myId) return true;
+    return String(list.access_role || "").toLowerCase() === "editor";
+  });
   const selectedGroup = wishlists.find((list) => (list.group_id ?? list.id) === selectedGroupId);
   const isSelectedShared =
     String(selectedGroup?.visibility || "").trim().toLowerCase() === "shared";
@@ -257,6 +265,7 @@ const Dashboard = () => {
   const renderWishlistCard = (list) => {
     const listId = list.group_id ?? list.id;
     const listName = list.group_name ?? list.name ?? "Untitled";
+    const isListOwner = myId == null || list.owner_id == null || list.owner_id === myId;
     const listItems = cartItems.filter((item) => item.group_id === listId);
     const itemCount = listItems.length;
     const previewImages = listItems
@@ -298,43 +307,45 @@ const Dashboard = () => {
             {visibility === "Shared" ? ` • ${collaborators} collaborator${collaborators === 1 ? "" : "s"}` : ""}
           </span>
           <span className="wishlist-item-count">{itemCount} {itemCount === 1 ? "item" : "items"}</span>
-          <div className="wishlist-card-actions">
-            {String(visibility).toLowerCase() === "shared" ? (
+          {isListOwner ? (
+            <div className="wishlist-card-actions">
+              {String(visibility).toLowerCase() === "shared" ? (
+                <button
+                  type="button"
+                  className="wishlist-mini-btn"
+                  aria-label={`Invite collaborators to ${listName}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/wishlist/${listId}`);
+                  }}
+                >
+                  Invite
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="wishlist-mini-btn"
-                aria-label={`Invite collaborators to ${listName}`}
+                aria-label={`Rename ${listName}`}
                 onClick={(e) => {
                   e.stopPropagation();
-                  navigate(`/wishlist/${listId}`);
+                  handleRenameWishlist(list);
                 }}
               >
-                Invite
+                Rename
               </button>
-            ) : null}
-            <button
-              type="button"
-              className="wishlist-mini-btn"
-              aria-label={`Rename ${listName}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleRenameWishlist(list);
-              }}
-            >
-              Rename
-            </button>
-            <button
-              type="button"
-              className="wishlist-mini-btn wishlist-mini-danger"
-              aria-label={`Delete ${listName}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDeleteWishlist(list);
-              }}
-            >
-              Delete
-            </button>
-          </div>
+              <button
+                type="button"
+                className="wishlist-mini-btn wishlist-mini-danger"
+                aria-label={`Delete ${listName}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteWishlist(list);
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          ) : null}
         </div>
       </button>
     );

@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Download cart-It extension</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: linear-gradient(165deg, #4a103d 0%, #6b2140 45%, #7c2d12 100%);
+        color: #fff7ed;
+        padding: 28px 18px 40px;
+        line-height: 1.55;
+      }
+      .wrap {
+        max-width: 520px;
+        margin: 0 auto;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(255, 255, 255, 0.12);
+        border: 1px solid rgba(255, 237, 213, 0.35);
+        border-radius: 999px;
+        padding: 6px 14px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        margin-bottom: 14px;
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: 1.65rem;
+        letter-spacing: -0.02em;
+      }
+      .lead {
+        margin: 0 0 16px;
+        color: #ffedd5;
+        font-size: 0.98rem;
+      }
+      .what-to-do {
+        margin: 0 0 22px;
+        padding: 14px 16px;
+        background: rgba(0, 0, 0, 0.22);
+        border: 1px solid rgba(255, 237, 213, 0.35);
+        border-radius: 14px;
+        font-size: 0.95rem;
+        color: #fff7ed;
+      }
+      .what-to-do strong {
+        color: #fed7aa;
+        display: block;
+        margin-bottom: 8px;
+        font-size: 1rem;
+      }
+      .what-to-do ol {
+        margin: 0;
+        padding-left: 1.2rem;
+      }
+      .what-to-do li {
+        margin-bottom: 6px;
+      }
+      .card {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 237, 213, 0.25);
+        border-radius: 18px;
+        padding: 18px 18px 16px;
+        margin-bottom: 16px;
+        backdrop-filter: blur(6px);
+      }
+      .card h2 {
+        margin: 0 0 6px;
+        font-size: 1.05rem;
+        color: #fed7aa;
+      }
+      .card-sub {
+        margin: 0 0 12px;
+        font-size: 0.88rem;
+        color: rgba(255, 247, 237, 0.88);
+        line-height: 1.45;
+      }
+      ol {
+        margin: 0;
+        padding-left: 1.25rem;
+        color: #fff7ed;
+      }
+      li {
+        margin-bottom: 10px;
+      }
+      li strong {
+        color: #fff;
+      }
+      .path {
+        font-family: ui-monospace, monospace;
+        font-size: 0.82rem;
+        background: rgba(0, 0, 0, 0.25);
+        padding: 8px 10px;
+        border-radius: 10px;
+        margin-top: 6px;
+        word-break: break-all;
+        color: #fde68a;
+      }
+      .btn-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+      }
+      button {
+        border: 0;
+        border-radius: 12px;
+        padding: 12px 18px;
+        font-weight: 800;
+        font-size: 0.92rem;
+        cursor: pointer;
+        background: linear-gradient(180deg, #f97316, #ea580c);
+        color: #fff;
+        box-shadow: 0 3px 0 #9a3412;
+      }
+      button.secondary {
+        background: rgba(255, 255, 255, 0.2);
+        color: #fff;
+        box-shadow: none;
+        border: 1px solid rgba(255, 255, 255, 0.35);
+      }
+      button:hover {
+        filter: brightness(1.05);
+      }
+      .btn-hint {
+        display: block;
+        margin-top: 8px;
+        font-size: 0.8rem;
+        color: rgba(255, 237, 213, 0.85);
+        font-weight: 600;
+      }
+      .toast {
+        margin-top: 12px;
+        font-size: 0.88rem;
+        font-weight: 700;
+        color: #bbf7d0;
+        min-height: 1.2em;
+      }
+      .footer {
+        margin-top: 22px;
+        font-size: 0.82rem;
+        color: rgba(255, 237, 213, 0.75);
+      }
+      a {
+        color: #fed7aa;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="badge"><span aria-hidden="true">🛒</span> cart-It</div>
+      <h1>Download extension <span aria-hidden="true">✨</span></h1>
+      <p class="lead">
+        <strong>Compatible with Microsoft Edge and Google Chrome.</strong>
+        <strong>Who this page is for:</strong> you (and anyone helping you build Cart-It) — not your final shoppers yet. After you publish the extension to the Edge / Chrome store, customers will install with one click and <em>won’t</em> need Developer mode.
+      </p>
+      <p class="lead" style="margin-top: -8px">
+        <strong>Why Developer mode?</strong> Browsers only let you “Load unpacked” from a folder on your computer when that safety switch is on. It’s their rule for anything that isn’t coming from the official store.
+      </p>
+      <p class="lead" style="margin-top: -8px">
+        Right now there’s no store package — so pick your browser below and follow the steps to wire up the same <code>extension</code> folder you have in your project.
+      </p>
+
+      <div class="what-to-do">
+        <strong>What to do (same idea for both browsers)</strong>
+        <ol>
+          <li>
+            Click the <strong>Download / add</strong> button for <em>Edge</em> or <em>Chrome</em> — it copies the right setup link.
+          </li>
+          <li>
+            Paste into your browser’s <strong>address bar</strong>, press <strong>Enter</strong>.
+          </li>
+          <li>Turn on <strong>Developer mode</strong> → <strong>Load unpacked</strong> → choose your project’s <code>extension</code> folder.</li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <h2>Compatible with: Microsoft Edge</h2>
+        <p class="card-sub">Use this block to download / add cart-It in Edge.</p>
+        <ol>
+          <li>Click the orange button (copies <strong>edge://extensions</strong>).</li>
+          <li>Paste in the address bar → Enter.</li>
+          <li>Developer mode <strong>on</strong> → <strong>Load unpacked</strong> → select the folder with <code>manifest.json</code>.</li>
+        </ol>
+        <div class="btn-row">
+          <div>
+            <button type="button" id="copyEdge">Download / add for Edge</button>
+            <span class="btn-hint">← Step 1 for Edge: copies the extensions page link</span>
+          </div>
+        </div>
+        <p class="toast" id="toastEdge" role="status"></p>
+      </div>
+
+      <div class="card">
+        <h2>Compatible with: Google Chrome</h2>
+        <p class="card-sub">Use this block to download / add cart-It in Chrome.</p>
+        <ol>
+          <li>Click the button (copies <strong>chrome://extensions</strong>).</li>
+          <li>Paste in the address bar → Enter.</li>
+          <li>Developer mode → <strong>Load unpacked</strong> → same <code>extension</code> folder.</li>
+        </ol>
+        <div class="btn-row">
+          <div>
+            <button type="button" class="secondary" id="copyChrome">Download / add for Chrome</button>
+            <span class="btn-hint">← Step 1 for Chrome: copies the extensions page link</span>
+          </div>
+        </div>
+        <p class="toast" id="toastChrome" role="status"></p>
+      </div>
+
+      <div class="card">
+        <h2>Which folder to choose?</h2>
+        <p style="margin: 0 0 6px">When it asks for a folder, choose:</p>
+        <div class="path">…\Cart_It\extension\ &nbsp;← this folder (must include manifest.json)</div>
+      </div>
+
+      <p class="footer">
+        After it’s loaded, open cart-It in the browser and log in — the extension will sync your session. Close this tab when you’re done.
+      </p>
+    </div>
+    <script>
+      function copyText(text, toastId) {
+        var el = document.getElementById(toastId);
+        function ok() {
+          if (el) el.textContent = "Copied — now paste in the address bar and press Enter.";
+        }
+        function fail() {
+          if (el) el.textContent = "Copy manually: " + text;
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(ok).catch(fail);
+        } else {
+          fail();
+        }
+      }
+      document.getElementById("copyEdge").addEventListener("click", function () {
+        copyText("edge://extensions", "toastEdge");
+      });
+      document.getElementById("copyChrome").addEventListener("click", function () {
+        copyText("chrome://extensions", "toastChrome");
+      });
+    </script>
+  </body>
+</html>

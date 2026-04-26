@@ -2,6 +2,11 @@
  * PostgreSQL connection for the API.
  * DATABASE_URL in server/.env points at your database (local or Neon).
  * A "pool" reuses connections so we do not open a new TCP connection on every query.
+ *
+ * STUDENT FLOW:
+ * - Frontend calls an endpoint in index.ts.
+ * - Endpoint runs SQL using this pool.
+ * - Query result is returned as JSON to frontend.
  */
 import dotenv from "dotenv";
 import { Pool } from "pg";
@@ -19,7 +24,7 @@ export const pool = new Pool({
 
 pool.connect()
   .then((client) => {
-    console.log("Connected to LOCAL PostgreSQL successfully");
+    console.log("Connected to PostgreSQL successfully");
     client.release();
   })
   .catch((error) => {

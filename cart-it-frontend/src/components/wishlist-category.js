@@ -95,12 +95,13 @@ export default function WishlistCategoryPage() {
       setError("Invalid category.");
       return;
     }
-    const [g, list, memberRows] = await Promise.all([
+    const [me, g, list, memberRows] = await Promise.all([
+      apiRequest("/api/me"),
       apiRequest(`/api/groups/${gid}`),
       apiRequest(`/api/cart-items?group_id=${encodeURIComponent(String(gid))}`),
       apiRequest("/api/group-members").catch(() => []),
     ]);
-    setGroup(g);
+    setGroup({ ...g, _viewerUserId: me?.user?.userId });
     setItems(Array.isArray(list) ? list : []);
     const perGroup = Array.isArray(memberRows)
       ? memberRows.filter((m) => Number(m.group_id) === gid)
@@ -112,6 +113,10 @@ export default function WishlistCategoryPage() {
   const ownerMembers = members.filter((m) => String(m.role || "").toLowerCase() === "owner");
   const editorMembers = members.filter((m) => String(m.role || "").toLowerCase() !== "owner");
   const sortedMembers = [...ownerMembers, ...editorMembers];
+  const isWishlistOwner =
+    group &&
+    group._viewerUserId != null &&
+    Number(group.owner_id) === Number(group._viewerUserId);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -146,30 +151,40 @@ export default function WishlistCategoryPage() {
           </header>
           <div className="wishlist-page-controls">
             <label htmlFor="wishlistVisibility">Visibility</label>
-            <select
-              id="wishlistVisibility"
-              value={group.visibility || "Private"}
-              onChange={(e) => handleVisibilityChange(e.target.value)}
-            >
-              <option value="Private">Private</option>
-              <option value="Shared">Shared</option>
-            </select>
+            {isWishlistOwner ? (
+              <select
+                id="wishlistVisibility"
+                value={group.visibility || "Private"}
+                onChange={(e) => handleVisibilityChange(e.target.value)}
+              >
+                <option value="Private">Private</option>
+                <option value="Shared">Shared</option>
+              </select>
+            ) : (
+              <p id="wishlistVisibility" className="wishlist-page-sub">
+                {group.visibility || "Private"} (only the owner can change this)
+              </p>
+            )}
             {String(group.visibility || "").toLowerCase() === "shared" ? (
               <>
-                <div className="invite-row">
-                  <input
-                    type="email"
-                    className="invite-input"
-                    placeholder="Invite collaborator by email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                  />
-                  <button type="button" className="invite-btn" onClick={handleInviteMember}>
-                    Invite
-                  </button>
-                </div>
+                {isWishlistOwner ? (
+                  <div className="invite-row">
+                    <input
+                      type="email"
+                      className="invite-input"
+                      placeholder="Invite collaborator by email"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                    />
+                    <button type="button" className="invite-btn" onClick={handleInviteMember}>
+                      Invite
+                    </button>
+                  </div>
+                ) : null}
                 <p className="wishlist-page-sub">
-                  Shared wishlist: invite collaborators by email.
+                  {isWishlistOwner
+                    ? "Shared wishlist: invite collaborators by email."
+                    : "You are a collaborator on this shared wishlist."}
                 </p>
                 {sortedMembers.length > 0 ? (
                   <div className="members-list">
@@ -196,20 +211,27 @@ export default function WishlistCategoryPage() {
             )}
             {inviteStatus ? <p className="wishlist-page-sub">{inviteStatus}</p> : null}
           </div>
-          <div className="selected-item-actions" style={{ maxWidth: "360px", marginBottom: "16px" }}>
-            <button type="button" className="item-action-btn" onClick={handleRenameWishlist}>
-              Rename wishlist
-            </button>
-            <button type="button" className="item-action-btn item-action-danger" onClick={handleDeleteWishlist}>
-              Delete wishlist
-            </button>
-          </div>
+          {isWishlistOwner ? (
+            <div className="selected-item-actions" style={{ maxWidth: "360px", marginBottom: "16px" }}>
+              <button type="button" className="item-action-btn" onClick={handleRenameWishlist}>
+                Rename wishlist
+              </button>
+              <button type="button" className="item-action-btn item-action-danger" onClick={handleDeleteWishlist}>
+                Delete wishlist
+              </button>
+            </div>
+          ) : null}
           <section className="wishlist-page-list">
             {items.length === 0 ? (
               <div className="empty-inline">No items in this category yet. Save from the extension or add one on the dashboard.</div>
             ) : (
               items.map((item) => (
-                <FullItemEditor key={item.item_id} item={item} onChanged={load} />
+                <FullItemEditor
+                  key={item.item_id}
+                  item={item}
+                  onChanged={load}
+                  showGroupComments={String(group?.visibility || "").toLowerCase() === "shared"}
+                />
               ))
             )}
           </section>

@@ -1,5 +1,12 @@
+try {
+  importScripts("config.js");
+} catch {
+  /* config optional in some dev setups */
+}
+
 /** Toolbar icon opens the side panel (Chrome 114+). */
 function registerPanelClickOpensSide() {
+  if (!chrome?.sidePanel?.setPanelBehavior) return Promise.resolve();
   return chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 }
 
@@ -18,6 +25,8 @@ function isLikelyJwt(token) {
 }
 
 function isCartItHost(hostname) {
+  const fn = globalThis.CART_IT_CONFIG?.isWebAppHost;
+  if (typeof fn === "function") return fn(hostname);
   return (
     hostname === "cart-it.pages.dev" ||
     hostname.endsWith(".cart-it.pages.dev") ||

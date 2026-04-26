@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { LuTrash2 } from "react-icons/lu";
 import { apiRequest } from "./api";
 import "../styles/full-item-editor.css";
@@ -9,21 +9,65 @@ function money(n) {
   return x.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
+function toEditableMoneyString(value, fallback) {
+  const direct = Number(value);
+  if (Number.isFinite(direct) && direct >= 0) return String(direct);
+  const fb = Number(fallback);
+  if (Number.isFinite(fb) && fb >= 0) return String(fb);
+  return "";
+}
+
+function formatCommentTime(iso) {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  } catch {
+    return String(iso);
+  }
+}
+
+/** Display name + optional email line for group comment authors. */
+function groupCommentAuthorParts(c) {
+  const username = (c.username && String(c.username).trim()) || "";
+  const email = (c.email && String(c.email).trim()) || "";
+  const primary = username || email || `User #${c.user_id}`;
+  const secondary = username && email ? email : null;
+  return { primary, secondary };
+}
+
 /**
- * One saved product: open link, purchased toggle + paid amount, notes, delete.
+ * One saved product: link, purchased + amount, private notes, group comment thread (shared lists), delete.
  */
-export default function FullItemEditor({ item, onChanged }) {
+export default function FullItemEditor({ item, onChanged, showGroupComments = false }) {
   const [notes, setNotes] = useState(item.notes || "");
+  const [thread, setThread] = useState([]);
+  const [newComment, setNewComment] = useState("");
   const [paidStr, setPaidStr] = useState(
-    String(item.purchase_price ?? item.current_price ?? "0")
+    toEditableMoneyString(item.purchase_price, item.current_price)
   );
   const [busy, setBusy] = useState(false);
+  const [threadBusy, setThreadBusy] = useState(false);
   const [msg, setMsg] = useState("");
+
+  const loadThread = useCallback(async () => {
+    if (!showGroupComments) return;
+    const rows = await apiRequest(`/api/cart-items/${item.item_id}/group-comments`);
+    setThread(Array.isArray(rows) ? rows : []);
+  }, [showGroupComments, item.item_id]);
 
   useEffect(() => {
     setNotes(item.notes || "");
-    setPaidStr(String(item.purchase_price ?? item.current_price ?? "0"));
+    setPaidStr(toEditableMoneyString(item.purchase_price, item.current_price));
   }, [item.item_id, item.notes, item.purchase_price, item.current_price]);
+
+  useEffect(() => {
+    if (!showGroupComments) {
+      setThread([]);
+      return;
+    }
+    loadThread().catch(() => setThread([]));
+  }, [showGroupComments, loadThread]);
 
   const patch = async (body) => {
     setBusy(true);
@@ -55,6 +99,26 @@ export default function FullItemEditor({ item, onChanged }) {
   const saveNotes = async () => {
     await patch({ notes: notes.trim() || null });
     setMsg("Notes saved.");
+  };
+
+  const postGroupComment = async () => {
+    const text = newComment.trim();
+    if (!text) return;
+    setThreadBusy(true);
+    setMsg("");
+    try {
+      await apiRequest(`/api/cart-items/${item.item_id}/group-comments`, {
+        method: "POST",
+        body: JSON.stringify({ body: text }),
+      });
+      setNewComment("");
+      await loadThread();
+      setMsg("Comment posted.");
+    } catch (e) {
+      setMsg(e.message || "Could not post comment.");
+    } finally {
+      setThreadBusy(false);
+    }
   };
 
   const savePaidOnly = async () => {
@@ -139,11 +203,10 @@ export default function FullItemEditor({ item, onChanged }) {
           </label>
           <input
             id={`paid-${item.item_id}`}
-            type="number"
-            min="0"
-            step="0.01"
-            value={paidStr}
-            disabled={busy}
+            type="text"
+            inputMode="decimal"
+            pattern="[0-9]*[.,]?[0-9]*"
+            value={paidStr ?? ""}
             onChange={(e) => setPaidStr(e.target.value)}
           />
           <button type="button" className="full-item-secondary-btn" disabled={busy} onClick={savePaidOnly}>
@@ -156,11 +219,13 @@ export default function FullItemEditor({ item, onChanged }) {
         <label className="full-item-notes-label" htmlFor={`notes-${item.item_id}`}>
           Notes
         </label>
+        <p className="full-item-field-hint">
+          Only you see this — your private reminders for this item (saved per person).
+        </p>
         <textarea
           id={`notes-${item.item_id}`}
           rows={3}
           value={notes}
-          disabled={busy}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Sizing, coupons, reminders…"
         />
@@ -168,6 +233,56 @@ export default function FullItemEditor({ item, onChanged }) {
           Save notes
         </button>
       </div>
+
+      {showGroupComments ? (
+        <div className="full-item-row full-item-notes full-item-group-comments">
+          <label className="full-item-notes-label">Group comments</label>
+          <p className="full-item-field-hint">
+            Thread visible to everyone on this shared wishlist. Comments stay here when you log out and back in.
+          </p>
+          <div className="full-item-thread" aria-live="polite">
+            {thread.length === 0 ? (
+              <p className="full-item-thread-empty">No comments yet — start the thread below.</p>
+            ) : (
+              thread.map((c) => {
+                const { primary, secondary } = groupCommentAuthorParts(c);
+                return (
+                  <div key={c.comment_id} className="full-item-thread-row">
+                    <div className="full-item-thread-meta">
+                      <div className="full-item-thread-author">
+                        <span className="full-item-thread-by">Posted by </span>
+                        <strong className="full-item-thread-author-name">{primary}</strong>
+                        {secondary ? (
+                          <span className="full-item-thread-author-sub" title={secondary}>
+                            {secondary}
+                          </span>
+                        ) : null}
+                      </div>
+                      <span className="full-item-thread-time">{formatCommentTime(c.created_at)}</span>
+                    </div>
+                    <div className="full-item-thread-body">{c.body}</div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <textarea
+            id={`gcomment-new-${item.item_id}`}
+            rows={2}
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
+            placeholder="Add a comment for the group..."
+          />
+          <button
+            type="button"
+            className="full-item-primary-btn"
+            disabled={busy || threadBusy}
+            onClick={postGroupComment}
+          >
+            {threadBusy ? "Posting…" : "Post comment"}
+          </button>
+        </div>
+      ) : null}
 
       {msg ? <p className="full-item-msg">{msg}</p> : null}
     </article>

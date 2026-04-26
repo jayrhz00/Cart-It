@@ -1,5 +1,11 @@
-const DEFAULT_API = "https://cart-it.onrender.com";
-const FALLBACK_LOCAL_API = "http://127.0.0.1:5001";
+const DEFAULT_API =
+  typeof CART_IT_CONFIG !== "undefined" && CART_IT_CONFIG.defaultApiBase
+    ? CART_IT_CONFIG.defaultApiBase
+    : "https://cart-it.onrender.com";
+const FALLBACK_LOCAL_API =
+  typeof CART_IT_CONFIG !== "undefined" && CART_IT_CONFIG.fallbackLocalApi
+    ? CART_IT_CONFIG.fallbackLocalApi
+    : "http://127.0.0.1:5001";
 
 /** Runs in the product tab — name, price, image, store from the page. */
 function getPageData() {
@@ -191,6 +197,16 @@ function truncate(s, max) {
   return t.length <= max ? t : `${t.slice(0, max - 1)}…`;
 }
 
+async function getWebAppOrigin() {
+  const fallback =
+    typeof CART_IT_CONFIG !== "undefined" && CART_IT_CONFIG.defaultWebAppOrigin
+      ? CART_IT_CONFIG.defaultWebAppOrigin
+      : "https://cart-it.pages.dev";
+  const { webAppOrigin: stored } = await chrome.storage.local.get(["webAppOrigin"]);
+  const raw = String(stored || fallback).trim().replace(/\/$/, "");
+  return raw || fallback.replace(/\/$/, "");
+}
+
 function setStatus(text, ok) {
   const el = document.getElementById("status");
   el.textContent = text;
@@ -235,9 +251,12 @@ async function setAuthLine() {
   const ok = !!jwt;
   const who = currentUserLabel ? ` as ${currentUserLabel}` : "";
   el.textContent = ok
-    ? `Signed in${who} — token synced from your cart-It tab.`
-    : "Open cart-It (cart-it.pages.dev or localhost), log in, then reopen this panel.";
+    ? `Signed in${who}. Save from any normal product page in the active tab.`
+    : "Sign in below, or open Cart-It in a browser tab and log in — we’ll sync your session automatically.";
   el.style.color = ok ? "#166534" : "#92400e";
+
+  const signInWrap = document.getElementById("signInWrap");
+  if (signInWrap) signInWrap.hidden = ok;
 }
 
 function isLikelyJwt(token) {
@@ -245,6 +264,8 @@ function isLikelyJwt(token) {
 }
 
 function isCartItHost(hostname) {
+  const fn = globalThis.CART_IT_CONFIG?.isWebAppHost;
+  if (typeof fn === "function") return fn(hostname);
   return (
     hostname === "cart-it.pages.dev" ||
     hostname.endsWith(".cart-it.pages.dev") ||
@@ -313,7 +334,8 @@ async function resolveDashboardUrl() {
   if (typeof jwt_origin === "string" && jwt_origin.trim()) {
     return `${jwt_origin.replace(/\/$/, "")}/dashboard`;
   }
-  return "https://cart-it.pages.dev/dashboard";
+  const origin = await getWebAppOrigin();
+  return `${origin}/dashboard`;
 }
 
 async function apiBase() {
@@ -597,12 +619,71 @@ document.getElementById("apiBase").addEventListener("change", async () => {
   await loadCategories();
 });
 
+const webAppOriginEl = document.getElementById("webAppOrigin");
+if (webAppOriginEl) {
+  webAppOriginEl.addEventListener("change", async () => {
+    const v =
+      webAppOriginEl.value.trim().replace(/\/$/, "") || (await getWebAppOrigin());
+    await chrome.storage.local.set({ webAppOrigin: v });
+  });
+}
+
+document.getElementById("signInBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("signInBtn");
+  const email = document.getElementById("signInEmail").value.trim();
+  const password = document.getElementById("signInPassword").value;
+  if (!email || !password) {
+    setStatus("Enter email and password.", false);
+    return;
+  }
+  btn.disabled = true;
+  setStatus("Signing in…", true);
+  try {
+    const base = await apiBase();
+    const res = await fetch(`${base}/api/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setStatus(data.message || data.error || `Sign-in failed (${res.status})`, false);
+      return;
+    }
+    const token = typeof data.token === "string" ? data.token.trim() : "";
+    if (!isLikelyJwt(token)) {
+      setStatus("Unexpected response from server.", false);
+      return;
+    }
+    authRejected = false;
+    const origin = await getWebAppOrigin();
+    await chrome.storage.local.set({ jwt: token, jwt_origin: origin });
+    document.getElementById("signInPassword").value = "";
+    currentUserLabel = String(data.user?.username || data.user?.email || "");
+    setStatus("Signed in.", true);
+    await setAuthLine();
+    await loadCategories();
+  } catch (e) {
+    setStatus(e.message || "Network error during sign-in.", false);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("createAccountBtn").addEventListener("click", async () => {
+  const origin = await getWebAppOrigin();
+  chrome.tabs.create({ url: `${origin}/signup`, active: true });
+});
+
 document.getElementById("listScope").addEventListener("change", () => {
   renderCategoryOptions();
 });
 
 async function init() {
-  const { apiBase: stored } = await chrome.storage.local.get(["apiBase"]);
+  const { apiBase: stored, webAppOrigin: storedWeb } = await chrome.storage.local.get([
+    "apiBase",
+    "webAppOrigin",
+  ]);
   const apiEl = document.getElementById("apiBase");
   const normalizedStored = (stored || "").trim().replace(/\/$/, "");
   const shouldMigrate =
@@ -612,6 +693,16 @@ async function init() {
   const resolvedBase = shouldMigrate ? DEFAULT_API : normalizedStored;
   await chrome.storage.local.set({ apiBase: resolvedBase });
   if (apiEl) apiEl.value = resolvedBase;
+
+  const defaultWeb =
+    typeof CART_IT_CONFIG !== "undefined" && CART_IT_CONFIG.defaultWebAppOrigin
+      ? CART_IT_CONFIG.defaultWebAppOrigin
+      : "https://cart-it.pages.dev";
+  const webAppEl = document.getElementById("webAppOrigin");
+  const resolvedWeb = (storedWeb || defaultWeb).trim().replace(/\/$/, "");
+  await chrome.storage.local.set({ webAppOrigin: resolvedWeb });
+  if (webAppEl) webAppEl.value = resolvedWeb;
+
   authRejected = false;
   await setAuthLine();
   await refreshFromTab();

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   LuLayoutDashboard, 
   LuShoppingCart, 
@@ -22,6 +22,7 @@ const Dashboard = () => {
   // State for groups/categories and cart items
   const [groups, setGroups] = useState([]); 
   const [cartItems, setCartItems] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
   const [statusMessage, setStatusMessage] = useState("");
 
   // State for modals (creating new wishlist)
@@ -49,6 +50,14 @@ const Dashboard = () => {
         setGroups(groupData);
         setCartItems(itemData);
         localStorage.setItem('user', JSON.stringify(meData.user));
+
+        try {
+          const analyticsData = await apiRequest('/api/analytics/spending');
+          setAnalytics(analyticsData);
+        } catch (_analyticsError) {
+          // Keep dashboard usable even if analytics endpoint is temporarily unavailable.
+          setAnalytics(null);
+        }
       } catch (error) {
         console.error("Error loading dashboard:", error);
         setStatusMessage(error.message || "Failed to load dashboard data");
@@ -102,9 +111,15 @@ const Dashboard = () => {
           <img src="/logo.png" alt="Cart-It Logo" className="sidebar-logo" />
           
           <div className="space-y-4">
-            <div className="sidebar-nav-item"><LuLayoutDashboard /> Dashboard</div>
-            <div className="sidebar-nav-item"><LuShoppingCart /> Cart</div>
-            <div className="sidebar-nav-item"><LuChartArea /> Spending Analytics</div>
+            <Link to="/dashboard" className="sidebar-nav-item">
+              <LuLayoutDashboard /> Dashboard
+            </Link>
+            <Link to="/cart" className="sidebar-nav-item">
+              <LuShoppingCart /> Cart
+            </Link>
+            <Link to="/analytics" className="sidebar-nav-item">
+              <LuChartArea /> Spending Analytics
+            </Link>
           </div>
 
           <div className="extension-card">
@@ -163,12 +178,33 @@ const Dashboard = () => {
         <section className="info-grid">
           <div className="dashboard-card">
             <h2 className="card-header">Spending Analytics</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="box-placeholder"></div>
-              <div className="box-placeholder"></div>
-              <div className="box-placeholder"></div>
-              <div className="box-placeholder"></div>
-            </div>
+            {analytics?.summary ? (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="box-placeholder">
+                  <p className="analytics-label">Total saved</p>
+                  <p className="analytics-value">{analytics.summary.total_items}</p>
+                </div>
+                <div className="box-placeholder">
+                  <p className="analytics-label">Wishlist items</p>
+                  <p className="analytics-value">{analytics.summary.open_count}</p>
+                </div>
+                <div className="box-placeholder">
+                  <p className="analytics-label">Purchased</p>
+                  <p className="analytics-value">{analytics.summary.purchased_count}</p>
+                </div>
+                <div className="box-placeholder">
+                  <p className="analytics-label">Spent</p>
+                  <p className="analytics-value">
+                    {Number(analytics.summary.total_spent || 0).toLocaleString("en-US", {
+                      style: "currency",
+                      currency: "USD",
+                    })}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="empty-state">Analytics not available yet.</p>
+            )}
           </div>
 
           <div className="dashboard-card">
