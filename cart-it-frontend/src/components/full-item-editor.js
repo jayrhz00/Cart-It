@@ -150,9 +150,9 @@ export default function FullItemEditor({ item, onChanged }) {
           </label>
           <input
             id={`paid-${item.item_id}`}
-            type="number"
-            min="0"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
+            pattern="[0-9]*[.,]?[0-9]*"
             value={paidStr ?? ""}
             onChange={(e) => setPaidStr(e.target.value)}
           />
@@ -170,7 +170,6 @@ export default function FullItemEditor({ item, onChanged }) {
           id={`notes-${item.item_id}`}
           rows={3}
           value={notes}
-          disabled={busy}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Sizing, coupons, reminders..."
         />

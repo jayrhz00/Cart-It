@@ -299,6 +299,19 @@ const Dashboard = () => {
           </span>
           <span className="wishlist-item-count">{itemCount} {itemCount === 1 ? "item" : "items"}</span>
           <div className="wishlist-card-actions">
+            {String(visibility).toLowerCase() === "shared" ? (
+              <button
+                type="button"
+                className="wishlist-mini-btn"
+                aria-label={`Invite collaborators to ${listName}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/wishlist/${listId}`);
+                }}
+              >
+                Invite
+              </button>
+            ) : null}
             <button
               type="button"
               className="wishlist-mini-btn"
