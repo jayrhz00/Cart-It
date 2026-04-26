@@ -3,6 +3,10 @@ const FALLBACK_LOCAL_API = "http://127.0.0.1:5001";
 
 /** Runs in the product tab — name, price, image, store from the page. */
 function getPageData() {
+  const textFromScript = (selector) => {
+    const el = document.querySelector(selector);
+    return el?.textContent || "";
+  };
   const ogImage =
     document.querySelector('meta[property="og:image"]')?.content ||
     document.querySelector('meta[name="twitter:image"]')?.content ||
@@ -17,26 +21,78 @@ function getPageData() {
   };
 
   let price = null;
+  const parseJsonPrice = (obj) => {
+    if (!obj || typeof obj !== "object") return null;
+    const candidates = [
+      obj.price,
+      obj.lowPrice,
+      obj.highPrice,
+      obj.minPrice,
+      obj.maxPrice,
+      obj?.offers?.price,
+      obj?.offers?.lowPrice,
+      obj?.offers?.highPrice,
+    ];
+    for (const c of candidates) {
+      const parsed = parsePriceText(c);
+      if (parsed != null) return parsed;
+    }
+    if (Array.isArray(obj)) {
+      for (const v of obj) {
+        const nested = parseJsonPrice(v);
+        if (nested != null) return nested;
+      }
+      return null;
+    }
+    for (const value of Object.values(obj)) {
+      if (value && typeof value === "object") {
+        const nested = parseJsonPrice(value);
+        if (nested != null) return nested;
+      }
+    }
+    return null;
+  };
+
+  const metaPriceSelectors = [
+    'meta[property="product:price:amount"]',
+    'meta[property="og:price:amount"]',
+    'meta[name="twitter:data1"]',
+    'meta[itemprop="price"]',
+    'meta[name="price"]',
+  ];
+  for (const selector of metaPriceSelectors) {
+    const parsed = parsePriceText(document.querySelector(selector)?.getAttribute("content"));
+    if (parsed != null) {
+      price = parsed;
+      break;
+    }
+  }
+
   const jsonLd = document.querySelectorAll('script[type="application/ld+json"]');
   for (const node of jsonLd) {
+    if (price != null) break;
     try {
       const data = JSON.parse(node.textContent);
-      const list = Array.isArray(data) ? data : [data];
-      for (const item of list) {
-        const offers = item.offers || item.aggregateOffer;
-        if (offers && typeof offers.price === "number") {
-          price = offers.price;
-          break;
-        }
-        if (offers && offers.lowPrice) {
-          price = parseFloat(offers.lowPrice, 10);
-          break;
-        }
-      }
+      const parsed = parseJsonPrice(data);
+      if (parsed != null) price = parsed;
     } catch (_) {
       /* ignore */
     }
   }
+
+  if (price == null) {
+    // Next.js commerce sites often store canonical product data here.
+    const nextDataRaw = textFromScript("#__NEXT_DATA__");
+    if (nextDataRaw) {
+      try {
+        const parsed = parseJsonPrice(JSON.parse(nextDataRaw));
+        if (parsed != null) price = parsed;
+      } catch (_) {
+        /* ignore */
+      }
+    }
+  }
+
   if (price == null) {
     const candidates = Array.from(
       document.querySelectorAll(
@@ -60,6 +116,23 @@ function getPageData() {
       }
     }
   }
+  if (price == null) {
+    const bodyText = (document.body?.innerText || "").slice(0, 12000);
+    const fallbackRegexes = [
+      /(?:\$|USD\s?)([0-9]+(?:\.[0-9]{1,2})?)/i,
+      /([0-9]+(?:\.[0-9]{1,2})?)\s?(?:USD|dollars?)/i,
+    ];
+    for (const re of fallbackRegexes) {
+      const m = bodyText.match(re);
+      if (m?.[1]) {
+        const parsed = parsePriceText(m[1]);
+        if (parsed != null) {
+          price = parsed;
+          break;
+        }
+      }
+    }
+  }
   const host = location.hostname.replace(/^www\./, "");
   return {
     item_name: document.title || "Untitled page",
@@ -74,6 +147,25 @@ let lastCapture = null;
 let authRejected = false;
 let cachedGroups = [];
 let currentUserLabel = "";
+
+function hexToRgba(hex, alpha) {
+  const cleaned = String(hex || "").trim().replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) return `rgba(241,245,249,${alpha})`;
+  const r = parseInt(cleaned.slice(0, 2), 16);
+  const g = parseInt(cleaned.slice(2, 4), 16);
+  const b = parseInt(cleaned.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function refreshCategoryColorChip() {
+  const chip = document.getElementById("categoryColorChip");
+  const sel = document.getElementById("category");
+  if (!chip || !sel) return;
+  const selectedId = sel.value;
+  const group = cachedGroups.find((g) => String(g.group_id) === String(selectedId));
+  const color = group?.color || "#e2e8f0";
+  chip.style.background = `linear-gradient(145deg, ${hexToRgba(color, 0.28)}, ${hexToRgba(color, 0.9)})`;
+}
 
 function truncate(s, max) {
   const t = String(s || "");
@@ -101,6 +193,13 @@ function setWishlistLink(href) {
 function setTabHint(text) {
   const el = document.getElementById("tabHint");
   if (el) el.textContent = text || "";
+}
+
+function setPriceHint(text, ok = true) {
+  const el = document.getElementById("priceHint");
+  if (!el) return;
+  el.textContent = text || "";
+  el.style.color = ok ? "#166534" : "#991b1b";
 }
 
 async function resolveJwt() {
@@ -224,6 +323,11 @@ async function refreshFromTab() {
           ? String(result.current_price)
           : "";
     }
+    if (Number(result?.current_price || 0) > 0) {
+      setPriceHint(`Auto price found: $${Number(result.current_price).toFixed(2)}`, true);
+    } else {
+      setPriceHint("Auto price not found on this page. Enter price manually before saving.", false);
+    }
     const title = (result.item_name || "").trim();
     setTabHint(title ? `Saving from this tab: ${truncate(title, 72)}` : "Saving from this tab.");
     setStatus("", true);
@@ -311,12 +415,13 @@ function renderCategoryOptions() {
     const name = g.group_name || `Category ${id}`;
     const opt = document.createElement("option");
     opt.value = String(id);
-    opt.textContent = name;
+    opt.textContent = `🎨 ${name}`;
     sel.appendChild(opt);
   }
   if (prev && [...sel.options].some((o) => o.value === prev)) {
     sel.value = prev;
   }
+  refreshCategoryColorChip();
 }
 
 document.getElementById("toggleNewCat").addEventListener("click", () => {
@@ -423,6 +528,11 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
       : String(cap && cap.current_price != null ? cap.current_price : "0");
     const rawPrice = parseFloat(sourcePrice, 10);
     const safePrice = Number.isNaN(rawPrice) || rawPrice < 0 ? 0 : rawPrice;
+    if (!(safePrice > 0)) {
+      setStatus("Price is required. Enter a valid price before saving this item.", false);
+      setPriceHint("Please enter a price greater than 0.", false);
+      return;
+    }
 
     const body = {
       item_name,
@@ -473,6 +583,9 @@ document.getElementById("apiBase").addEventListener("change", async () => {
 
 document.getElementById("listScope").addEventListener("change", () => {
   renderCategoryOptions();
+});
+document.getElementById("category").addEventListener("change", () => {
+  refreshCategoryColorChip();
 });
 
 async function init() {
