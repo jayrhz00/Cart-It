@@ -58,6 +58,15 @@ const LandingPage = () => {
           <FeatureCard icon="🔔" title="Price tracking" desc="Watch price history and react faster." />
           <FeatureCard icon="📂" title="Smart categories" desc="Color-code your lists and stay organized." />
         </div>
+        <div className="mt-16">
+          <button
+            type="button"
+            className="download-btn"
+            onClick={() => window.open("/extension-install.html", "_blank", "noopener,noreferrer")}
+          >
+            Download Cart-It Extension
+          </button>
+        </div>
       </section>
     </div>
   );
