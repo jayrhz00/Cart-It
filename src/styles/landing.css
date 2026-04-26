@@ -20,6 +20,9 @@
 .step-desc, .feature-desc { color: #64748b; margin: 0; }
 .features-section { padding: 40px 24px 80px; }
 .feature-icon { font-size: 1.5rem; margin-bottom: 8px; }
+.landing-footer-legal { margin-top: 28px; text-align: center; font-size: 0.9rem; }
+.landing-footer-legal a { color: #c2410c; font-weight: 600; text-decoration: none; }
+.landing-footer-legal a:hover { text-decoration: underline; }
 
 @media (max-width: 900px) {
   .steps-grid, .features-grid { grid-template-columns: 1fr; }

@@ -51,6 +51,9 @@ const Login = () => {
             <p className="auth-subtitle">
               Don&apos;t have an account? <Link to="/signup" className="link-styled">Sign up here.</Link>
             </p>
+            <p className="auth-subtitle">
+              Forgot password? <Link to="/forgot-password" className="link-styled">Reset it here.</Link>
+            </p>
 
             <form onSubmit={handleSubmit} className="auth-form-group">
               <div>
@@ -81,6 +84,9 @@ const Login = () => {
                 {isLoading ? "Logging in..." : "Log In"}
               </button>
             </form>
+            <p className="auth-subtitle" style={{ marginTop: "1rem" }}>
+              <Link to="/privacy" className="link-styled">Privacy Policy</Link>
+            </p>
           </div>
         </div>
       </div>

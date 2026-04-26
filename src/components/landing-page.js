@@ -67,6 +67,9 @@ const LandingPage = () => {
             Download Cart-It Extension
           </button>
         </div>
+        <p className="landing-footer-legal">
+          <Link to="/privacy">Privacy Policy</Link>
+        </p>
       </section>
     </div>
   );
