@@ -104,6 +104,9 @@ export default function FullItemEditor({ item, onChanged }) {
           {item.store ? <span className="full-item-store">{item.store}</span> : null}
           <div className="full-item-prices">
             <span>List: {money(item.current_price)}</span>
+            {item.is_in_stock === false ? (
+              <span className="full-item-stock-tag">Out of stock</span>
+            ) : null}
             {item.is_purchased ? (
               <span className="full-item-purchased-tag">Purchased</span>
             ) : null}

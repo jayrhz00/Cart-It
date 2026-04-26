@@ -6,7 +6,9 @@ import {
   LuChartArea, 
   LuCirclePlus, 
   LuLogOut,
-  LuDownload 
+  LuDownload,
+  LuPencil,
+  LuTrash2
 } from "react-icons/lu";
 import '../styles/dashboard.css';
 import { apiRequest } from './api';
@@ -186,6 +188,22 @@ const Dashboard = () => {
     }
   };
 
+  const handleDeleteWishlist = async (group) => {
+    if (!group) return;
+    const listId = group.group_id ?? group.id;
+    const listName = String(group.group_name ?? group.name ?? "this wishlist");
+    if (!window.confirm(`Delete "${listName}"? This cannot be undone.`)) return;
+    try {
+      await apiRequest(`/api/groups/${listId}`, { method: "DELETE" });
+      if (selectedGroupId === listId) {
+        setSelectedGroupId(null);
+      }
+      await reloadDashboardData();
+    } catch (error) {
+      alert(error.message || "Could not delete wishlist.");
+    }
+  };
+
   const handleInviteMember = async () => {
     const email = inviteEmail.trim();
     if (!email || selectedGroupId == null) {
@@ -255,8 +273,13 @@ const Dashboard = () => {
         key={listId}
         className={`wishlist-card ${isSelected ? "wishlist-card-active" : ""}`}
         onClick={() => {
-          setSelectedGroupId(listId);
+          setSelectedGroupId(null);
           navigate(`/wishlist/${listId}`);
+          setTimeout(() => {
+            if (window.location.pathname !== `/wishlist/${listId}`) {
+              window.location.assign(`/wishlist/${listId}`);
+            }
+          }, 120);
         }}
         type="button"
       >
@@ -277,6 +300,30 @@ const Dashboard = () => {
             {visibility === "Shared" ? ` • ${collaborators} collaborator${collaborators === 1 ? "" : "s"}` : ""}
           </span>
           <span className="wishlist-item-count">{itemCount} {itemCount === 1 ? "item" : "items"}</span>
+          <div className="wishlist-card-actions">
+            <button
+              type="button"
+              className="wishlist-mini-btn"
+              aria-label={`Rename ${listName}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleRenameWishlist(list);
+              }}
+            >
+              <LuPencil size={14} />
+            </button>
+            <button
+              type="button"
+              className="wishlist-mini-btn wishlist-mini-danger"
+              aria-label={`Delete ${listName}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteWishlist(list);
+              }}
+            >
+              <LuTrash2 size={14} />
+            </button>
+          </div>
         </div>
       </button>
     );
@@ -417,6 +464,9 @@ const Dashboard = () => {
                     )}
                     <div className="selected-item-name">{item.item_name}</div>
                     <div className="selected-item-price">${Number(item.current_price || 0).toFixed(2)}</div>
+                    {item.is_in_stock === false ? (
+                      <div className="selected-item-out">Out of stock</div>
+                    ) : null}
                     {item.notes ? <div className="selected-item-notes">Note: {item.notes}</div> : null}
                     </a>
                     <div className="selected-item-actions">
@@ -490,6 +540,9 @@ const Dashboard = () => {
                     )}
                     <div className="recent-item-name">{item.item_name}</div>
                     <div className="recent-item-price">${Number(item.current_price || 0).toFixed(2)}</div>
+                    {item.is_in_stock === false ? (
+                      <div className="recent-item-out">Out of stock</div>
+                    ) : null}
                     {item.notes ? <div className="recent-item-notes">Note: {item.notes}</div> : null}
                   </a>
                 ))}
