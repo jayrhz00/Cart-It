@@ -94,8 +94,7 @@ const PrivacyPolicy = () => {
 
         <h2>Contact</h2>
         <p>
-          For privacy questions, contact us using the support email or support website listed on our Firefox
-          Add-on page (or on this site&apos;s support information).
+          For privacy questions, contact us at supportcartit@gmail.com.
         </p>
       </main>
     </div>
