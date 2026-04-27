@@ -233,7 +233,7 @@ const Dashboard = () => {
     selectedGroupId == null
       ? []
       : cartItems.filter((item) => item.group_id === selectedGroupId);
-  const myId = user?.userId;
+  const myId = user?.userId ?? user?.user_id ?? user?.id ?? null;
   const privateWishlists = wishlists.filter((list) => {
     if (myId != null && list.owner_id != null && list.owner_id !== myId) return false;
     return String(list.visibility || "Private").toLowerCase() !== "shared";
@@ -262,10 +262,18 @@ const Dashboard = () => {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const isOwnerForList = (list) => {
+    const ownerId = list?.owner_id ?? list?.ownerId ?? null;
+    const accessRole = String(list?.access_role ?? list?.role ?? "").toLowerCase();
+    if (accessRole === "owner") return true;
+    if (myId == null || ownerId == null) return false;
+    return String(ownerId) === String(myId);
+  };
+
   const renderWishlistCard = (list) => {
     const listId = list.group_id ?? list.id;
     const listName = list.group_name ?? list.name ?? "Untitled";
-    const isListOwner = myId == null || list.owner_id == null || list.owner_id === myId;
+    const isListOwner = isOwnerForList(list);
     const listItems = cartItems.filter((item) => item.group_id === listId);
     const itemCount = listItems.length;
     const previewImages = listItems
