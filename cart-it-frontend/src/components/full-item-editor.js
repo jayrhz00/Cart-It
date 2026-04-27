@@ -273,9 +273,14 @@ export default function FullItemEditor({
       </div>
 
       {canCopyToPrivate ? (
-        <div className="full-item-row">
+        <div className="full-item-row full-item-copy-row">
+          <label className="full-item-copy-label" htmlFor={`copy-private-${item.item_id}`}>
+            Choose private wishlist
+          </label>
           {privateTargets.length > 0 ? (
             <select
+              id={`copy-private-${item.item_id}`}
+              className="full-item-copy-select"
               value={selectedPrivateGroupId}
               disabled={busy || threadBusy || copyBusy}
               onChange={(e) => setSelectedPrivateGroupId(e.target.value)}
@@ -286,6 +291,8 @@ export default function FullItemEditor({
                 </option>
               ))}
             </select>
+          ) : (
+            <p className="full-item-field-hint">No private wishlist yet — item will copy to private items.</p>
           ) : null}
           <button
             type="button"

@@ -99,6 +99,25 @@
 .full-item-row {
   margin-top: 12px;
 }
+.full-item-copy-row {
+  display: grid;
+  gap: 6px;
+}
+.full-item-copy-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #ffedd5;
+}
+.full-item-copy-select {
+  width: 100%;
+  max-width: 280px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #111827;
+  padding: 8px 10px;
+  font-size: 0.92rem;
+}
 .full-item-check {
   display: inline-flex;
   align-items: center;
