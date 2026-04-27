@@ -243,7 +243,7 @@ export default function FullItemEditor({
             <span>List: {money(item.current_price)}</span>
             {item.is_purchased ? (
               <span className="full-item-purchased-tag">Purchased</span>
-            \)}
+            ) : null}
           </div>
         </div>
         <button
@@ -290,7 +290,7 @@ export default function FullItemEditor({
             </select>
           ) : (
             <p className="full-item-field-hint">No private wishlist yet — item will copy to private items.</p>
-          \)}
+          )}
           <button
             type="button"
             className="full-item-secondary-btn"
@@ -300,7 +300,7 @@ export default function FullItemEditor({
             {copyBusy ? "Copying…" : "Copy to my private list"}
           </button>
         </div>
-      \)}
+      ) : null}
 
       {item.is_purchased ? (
         <div className="full-item-row full-item-paid-row">
@@ -319,7 +319,7 @@ export default function FullItemEditor({
             Update amount
           </button>
         </div>
-      \)}
+      ) : null}
 
       <div className="full-item-row full-item-notes">
         <label className="full-item-notes-label" htmlFor={`notes-${item.item_id}`}>
@@ -362,7 +362,7 @@ export default function FullItemEditor({
                           <span className="full-item-thread-author-sub" title={secondary}>
                             {secondary}
                           </span>
-                        \)}
+                        ) : null}
                       </div>
                       <span className="full-item-thread-time">{formatCommentTime(c.created_at)}</span>
                     </div>
@@ -388,9 +388,10 @@ export default function FullItemEditor({
             {threadBusy ? "Posting…" : "Post comment"}
           </button>
         </div>
-      \)}
+      ) : null}
 
       {msg ? <p className="full-item-msg">{msg}</p> : null}
     </article>
   );
 }
+
