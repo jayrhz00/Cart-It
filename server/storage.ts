@@ -431,8 +431,18 @@ export class MemStorage implements IStorage
         return updatedNotification;
     }
 }
-    export class DatabaseStorage implements IStorage
+export class DatabaseStorage implements IStorage
     {
+        // STUDENT NOTE:
+        // This class is the real PostgreSQL-backed implementation used at runtime.
+        // It currently has core user/group methods implemented, while many optional
+        // interface methods are placeholders for future expansion.
+        //
+        // Why keep placeholders?
+        // - The interface documents the full storage contract.
+        // - You can implement missing methods incrementally without changing route code.
+        // - It shows clear next steps for project growth.
+
         // Creates new user in PostgreSQL
         async createUser(user: InsertUser): Promise<User>       
         {
@@ -576,6 +586,9 @@ async updateGroup(): Promise<Group | undefined>
     throw new Error("Not implemented yet");
 }
 
+    // Placeholder methods below are intentionally unimplemented in DatabaseStorage.
+    // Routes currently use direct SQL for these behaviors in index.ts.
+    // If you migrate logic here later, replace each throw with real SQL methods.
     getGroupMembers(): any { throw new Error("Not implemented"); }
     addGroupMember(): any { throw new Error("Not implemented"); }
     removeGroupMember(): any { throw new Error("Not implemented"); }

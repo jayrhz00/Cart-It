@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import DashShell from "./dash-shell";
 import FullItemEditor from "./full-item-editor";
@@ -40,6 +40,9 @@ export default function WishlistCategoryPage() {
   const [groupThread, setGroupThread] = useState([]);
   const [newGroupComment, setNewGroupComment] = useState("");
   const [groupThreadBusy, setGroupThreadBusy] = useState(false);
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [showCollabPanel, setShowCollabPanel] = useState(false);
+  const inviteInputRef = useRef(null);
 
   const handleRenameWishlist = async () => {
     if (!group) return;
@@ -162,6 +165,43 @@ export default function WishlistCategoryPage() {
     group &&
     group._viewerUserId != null &&
     Number(group.owner_id) === Number(group._viewerUserId);
+  const visibleItems = useMemo(() => {
+    if (activeFilter === "purchased") return items.filter((item) => Boolean(item.is_purchased));
+    if (activeFilter === "open") return items.filter((item) => !item.is_purchased);
+    return items;
+  }, [items, activeFilter]);
+  const totalPrice = useMemo(
+    () => items.reduce((sum, item) => sum + Number(item.current_price || 0), 0),
+    [items]
+  );
+
+  const handleFilterClick = () => {
+    setActiveFilter((prev) => (prev === "all" ? "open" : prev === "open" ? "purchased" : "all"));
+  };
+
+  const handleShareWishlist = async () => {
+    const shareUrl = `${window.location.origin}/wishlist/${group?.group_id || groupId}`;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setInviteStatus("Wishlist link copied. Send it to collaborators.");
+    } catch {
+      setInviteStatus(`Share this link: ${shareUrl}`);
+    }
+  };
+
+  const handleToggleCollab = () => {
+    if (String(group?.visibility || "").toLowerCase() !== "shared") {
+      setInviteStatus("Switch this wishlist to Shared to collaborate.");
+      return;
+    }
+    setShowCollabPanel((prev) => {
+      const next = !prev;
+      if (next) {
+        setTimeout(() => inviteInputRef.current?.focus(), 0);
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -190,10 +230,29 @@ export default function WishlistCategoryPage() {
             <div>
               <h1 className="dash-title wishlist-page-title">{group.group_name}</h1>
               <p className="wishlist-page-sub">
-                {items.length} {items.length === 1 ? "item" : "items"} in this wishlist
+                Total Price: ${totalPrice.toFixed(2)} · Updated
               </p>
             </div>
           </header>
+          <div className="wishlist-toolbar">
+            <button type="button" className="wishlist-toolbar-btn" onClick={handleFilterClick}>
+              Filter ({activeFilter === "all" ? "All" : activeFilter === "open" ? "Open" : "Purchased"})
+            </button>
+            <button type="button" className="wishlist-toolbar-btn" onClick={handleShareWishlist}>
+              Share
+            </button>
+            <button type="button" className="wishlist-toolbar-btn" onClick={handleToggleCollab}>
+              Collab
+            </button>
+            <button
+              type="button"
+              className="wishlist-toolbar-btn"
+              onClick={() => (isWishlistOwner ? handleRenameWishlist() : setInviteStatus("Only the owner can edit this wishlist."))}
+            >
+              Edit
+            </button>
+          </div>
+          {showCollabPanel ? (
           <div className="wishlist-page-controls">
             <label htmlFor="wishlistVisibility">Visibility</label>
             {isWishlistOwner ? (
@@ -215,6 +274,7 @@ export default function WishlistCategoryPage() {
                 {isWishlistOwner ? (
                   <div className="invite-row">
                     <input
+                      ref={inviteInputRef}
                       type="email"
                       className="invite-input"
                       placeholder="Invite collaborator by email"
@@ -256,6 +316,7 @@ export default function WishlistCategoryPage() {
             )}
             {inviteStatus ? <p className="wishlist-page-sub">{inviteStatus}</p> : null}
           </div>
+          ) : null}
           {isWishlistOwner ? (
             <div className="selected-item-actions" style={{ maxWidth: "360px", marginBottom: "16px" }}>
               <button type="button" className="item-action-btn" onClick={handleRenameWishlist}>
@@ -308,10 +369,10 @@ export default function WishlistCategoryPage() {
             </section>
           ) : null}
           <section className="wishlist-page-list">
-            {items.length === 0 ? (
+            {visibleItems.length === 0 ? (
               <div className="empty-inline">No items in this category yet. Save from the extension or add one on the dashboard.</div>
             ) : (
-              items.map((item) => (
+              visibleItems.map((item) => (
                 <FullItemEditor
                   key={item.item_id}
                   item={item}

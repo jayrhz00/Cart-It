@@ -1,73 +1,170 @@
-.analytics-email-note {
-  margin: 0 0 20px;
-  max-width: 36rem;
-  font-size: 0.9rem;
-  line-height: 1.45;
-  color: #ffedd5;
-}
-.analytics-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 28px;
-}
-.analytics-card {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
-  padding: 16px;
-  color: #fff;
-}
-.analytics-card h3 {
-  margin: 0 0 8px;
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: #ffedd5;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.analytics-stat {
-  margin: 0;
-  font-size: 1.75rem;
-  font-weight: 800;
-}
-.analytics-muted {
-  margin: 8px 0 0;
-  font-size: 0.85rem;
-  color: #fde68a;
-}
-.analytics-section-title {
-  margin: 0 0 12px;
-  font-size: 1.15rem;
-}
-.analytics-by-store {
-  max-width: 640px;
-}
-.analytics-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
-  overflow: hidden;
-  color: #fff;
-}
-.analytics-table th,
-.analytics-table td {
-  padding: 10px 12px;
-  text-align: left;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-}
-.analytics-table th {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #ffedd5;
-}
-.analytics-table tr:last-child td {
-  border-bottom: 0;
+.analytics-shell-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 24px;
+  color: #1f2937;
 }
 
-@media (max-width: 900px) {
-  .analytics-grid {
+.analytics-header-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.analytics-title {
+  margin: 0;
+  font-size: 2rem;
+  line-height: 1.1;
+}
+
+.analytics-subtitle {
+  margin: 4px 0 0;
+  color: #4b5563;
+}
+
+.analytics-range-tabs {
+  display: inline-flex;
+  gap: 8px;
+  background: #f3f4f6;
+  border-radius: 10px;
+  padding: 4px;
+}
+
+.analytics-range-btn {
+  border: 0;
+  background: transparent;
+  color: #4b5563;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.analytics-range-btn.active {
+  background: #d97745;
+  color: #fff;
+}
+
+.analytics-total-label {
+  margin: 22px 0 2px;
+  font-size: 1rem;
+  color: #4b5563;
+}
+
+.analytics-total-value {
+  margin: 0 0 20px;
+  font-size: 2.3rem;
+  font-weight: 800;
+  color: #111827;
+}
+
+.analytics-panels-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 16px;
+}
+
+.analytics-panel {
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 16px;
+  background: #fff;
+}
+
+.analytics-panel h2 {
+  margin: 0 0 12px;
+  font-size: 1.1rem;
+}
+
+.analytics-section-gap {
+  margin-top: 16px !important;
+}
+
+.analytics-progress-row {
+  margin-bottom: 10px;
+}
+
+.analytics-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.86rem;
+  margin-bottom: 5px;
+  color: #374151;
+}
+
+.analytics-progress-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: #e5e7eb;
+}
+
+.analytics-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #4b164c;
+}
+
+.analytics-breakdown-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.analytics-donut {
+  width: 170px;
+  height: 170px;
+  border-radius: 50%;
+  margin: 8px auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.analytics-donut-hole {
+  width: 62%;
+  height: 62%;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.analytics-legend {
+  width: 100%;
+  max-width: 280px;
+}
+
+.analytics-legend-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.86rem;
+  margin-bottom: 6px;
+}
+
+.analytics-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.dot-0 { background: #4b164c; }
+.dot-1 { background: #d77d41; }
+.dot-2 { background: #9ca3af; }
+
+.analytics-empty {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 980px) {
+  .analytics-header-row {
+    flex-direction: column;
+  }
+  .analytics-panels-grid {
     grid-template-columns: 1fr;
   }
 }

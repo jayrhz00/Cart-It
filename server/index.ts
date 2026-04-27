@@ -1943,6 +1943,7 @@ app.patch(
         is_purchased,
         purchase_price,
       } = req.body;
+      let normalizedPurchasePrice = purchase_price;
 
       if (group_id !== undefined) {
         fieldsToUpdate.push(`group_id = $${valueIndex++}`);
@@ -1976,15 +1977,20 @@ app.patch(
       if (is_purchased !== undefined) {
         fieldsToUpdate.push(`is_purchased = $${valueIndex++}`);
         values.push(is_purchased);
+        if (is_purchased === true) {
+          fieldsToUpdate.push(`purchase_date = COALESCE(purchase_date, CURRENT_TIMESTAMP)`);
+        } else {
+          fieldsToUpdate.push(`purchase_date = NULL`);
+        }
       }
-      if (purchase_price !== undefined) {
-        if (purchase_price !== null && Number(purchase_price) < 0) {
+      if (normalizedPurchasePrice !== undefined) {
+        if (normalizedPurchasePrice !== null && Number(normalizedPurchasePrice) < 0) {
           return res.status(400).json({
             message: "purchase_price must be null or a non-negative number",
           });
         }
         fieldsToUpdate.push(`purchase_price = $${valueIndex++}`);
-        values.push(purchase_price);
+        values.push(normalizedPurchasePrice);
       }
 
       const ownerCheck = await pool.query(
@@ -2022,6 +2028,16 @@ app.patch(
 
       const previousPrice = Number(ownerCheck.rows[0].current_price ?? 0);
       const previousItemName = String(ownerCheck.rows[0].item_name || "Item");
+
+      // Keep spending analytics consistent: if an item is marked purchased but no
+      // purchase price is provided, fall back to the current item price.
+      if (is_purchased === true && (normalizedPurchasePrice === undefined || normalizedPurchasePrice === null)) {
+        normalizedPurchasePrice = previousPrice;
+        if (!fieldsToUpdate.some((f) => f.startsWith("purchase_price = "))) {
+          fieldsToUpdate.push(`purchase_price = $${valueIndex++}`);
+          values.push(normalizedPurchasePrice);
+        }
+      }
 
       let updatedRow: Record<string, unknown>;
       if (fieldsToUpdate.length > 0) {
