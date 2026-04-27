@@ -224,6 +224,7 @@ export default function WishlistCategoryPage() {
                   item={item}
                   onChanged={load}
                   showGroupComments={false}
+                  allowCopyToPrivateFromShared={String(group?.visibility || "").toLowerCase() === "shared"}
                 />
               ))
             )}

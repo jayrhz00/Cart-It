@@ -39,7 +39,12 @@ function groupCommentAuthorParts(c) {
 /**
  * One saved product: link, purchased + amount, private notes, group comment thread (shared lists), delete.
  */
-export default function FullItemEditor({ item, onChanged, showGroupComments = false }) {
+export default function FullItemEditor({
+  item,
+  onChanged,
+  showGroupComments = false,
+  allowCopyToPrivateFromShared = false,
+}) {
   const [notes, setNotes] = useState(item.notes || "");
   const [thread, setThread] = useState([]);
   const [newComment, setNewComment] = useState("");
@@ -52,6 +57,7 @@ export default function FullItemEditor({ item, onChanged, showGroupComments = fa
   const [privateTargets, setPrivateTargets] = useState([]);
   const [selectedPrivateGroupId, setSelectedPrivateGroupId] = useState("");
   const [msg, setMsg] = useState("");
+  const canCopyToPrivate = showGroupComments || allowCopyToPrivateFromShared;
 
   const loadThread = useCallback(async () => {
     if (!showGroupComments) return;
@@ -73,7 +79,7 @@ export default function FullItemEditor({ item, onChanged, showGroupComments = fa
   }, [showGroupComments, loadThread]);
 
   useEffect(() => {
-    if (!showGroupComments) {
+    if (!canCopyToPrivate) {
       setPrivateTargets([]);
       setSelectedPrivateGroupId("");
       return;
@@ -101,7 +107,7 @@ export default function FullItemEditor({ item, onChanged, showGroupComments = fa
     return () => {
       alive = false;
     };
-  }, [showGroupComments]);
+  }, [canCopyToPrivate]);
 
   const patch = async (body) => {
     setBusy(true);
@@ -263,7 +269,7 @@ export default function FullItemEditor({ item, onChanged, showGroupComments = fa
         </label>
       </div>
 
-      {showGroupComments ? (
+      {canCopyToPrivate ? (
         <div className="full-item-row">
           {privateTargets.length > 0 ? (
             <select
