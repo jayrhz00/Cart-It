@@ -90,6 +90,7 @@ const Wishlist = () => {
       wishlists.map((w) => ({
         id: w.group_id ?? w.id,
         name: w.group_name ?? w.name ?? "Untitled",
+        visibility: w.visibility || "Private",
       })),
     [wishlists]
   );
@@ -158,10 +159,6 @@ const Wishlist = () => {
   };
 
   const handleRename = async () => {
-    if (!isOwner) {
-      alert("Only the list owner can rename this wishlist.");
-      return;
-    }
     const next = window.prompt("New wishlist name:", listName);
     if (next == null) return;
     const t = next.trim();
@@ -382,6 +379,7 @@ const Wishlist = () => {
                     <input
                       type="checkbox"
                       checked={!!item.is_purchased}
+                      onClick={(e) => e.stopPropagation()}
                       onChange={(e) => handleTogglePurchased(item, e.target.checked)}
                     />
                     Purchased
@@ -390,6 +388,8 @@ const Wishlist = () => {
                     rows={2}
                     className="mt-2 w-full rounded border border-gray-300 px-2 py-1 text-xs"
                     value={noteDrafts[item.item_id] ?? item.notes ?? ""}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
                     onChange={(e) =>
                       setNoteDrafts((prev) => ({
                         ...prev,
@@ -402,7 +402,10 @@ const Wishlist = () => {
                     type="button"
                     className="mt-2 rounded-md border border-gray-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
                     disabled={savingNoteId === item.item_id}
-                    onClick={() => handleSaveNotes(item)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSaveNotes(item);
+                    }}
                   >
                     {savingNoteId === item.item_id ? "Saving..." : "Save notes"}
                   </button>

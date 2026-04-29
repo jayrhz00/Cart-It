@@ -67,6 +67,7 @@ const Cart = () => {
       wishlists.map((w) => ({
         id: w.group_id ?? w.id,
         name: w.group_name ?? w.name ?? "Untitled",
+        visibility: w.visibility || "Private",
       })),
     [wishlists]
   );
@@ -336,6 +337,8 @@ const Cart = () => {
                     rows={2}
                     className="mt-2 w-full rounded border border-gray-300 px-2 py-1 text-xs"
                     value={noteDrafts[item.item_id] ?? item.notes ?? ""}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
                     onChange={(e) =>
                       setNoteDrafts((prev) => ({
                         ...prev,
@@ -348,7 +351,10 @@ const Cart = () => {
                     type="button"
                     className="mt-2 rounded-md border border-gray-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
                     disabled={savingNoteId === item.item_id}
-                    onClick={() => handleSaveNotes(item)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSaveNotes(item);
+                    }}
                   >
                     {savingNoteId === item.item_id ? "Saving..." : "Save notes"}
                   </button>

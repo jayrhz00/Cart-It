@@ -29,6 +29,7 @@ const Sidebar = ({ wishlists = [], showExtension = false }) => {
             {wishlists.map((list) => {
               const id = list.id ?? list.group_id;
               const name = list.name ?? list.group_name ?? 'Untitled';
+              const visibility = String(list.visibility || "Private");
               return (
                 <div
                   key={id}
@@ -38,7 +39,16 @@ const Sidebar = ({ wishlists = [], showExtension = false }) => {
                   tabIndex={0}
                   onKeyDown={(e) => e.key === 'Enter' && navigate(`/wishlist/${id}`)}
                 >
-                  {name}
+                  <span className="sidebar-wishlist-name">{name}</span>
+                  <span
+                    className={`sidebar-wishlist-badge ${
+                      visibility.toLowerCase() === "shared"
+                        ? "sidebar-wishlist-badge-shared"
+                        : "sidebar-wishlist-badge-private"
+                    }`}
+                  >
+                    {visibility}
+                  </span>
                 </div>
               );
             })}

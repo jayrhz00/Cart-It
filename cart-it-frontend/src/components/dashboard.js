@@ -19,6 +19,7 @@ const Dashboard = () => {
   const [newWishlistName, setNewWishlistName] = useState("");
   const [newWishlistVisibility, setNewWishlistVisibility] = useState("Private");
   const [moveTargets, setMoveTargets] = useState({});
+  const [togglingPurchasedId, setTogglingPurchasedId] = useState(null);
 
   const reload = useCallback(async () => {
     const [groups, items] = await Promise.all([
@@ -102,6 +103,7 @@ const Dashboard = () => {
       wishlists.map((w) => ({
         id: w.group_id ?? w.id,
         name: w.group_name ?? w.name ?? "Untitled",
+        visibility: w.visibility || "Private",
       })),
     [wishlists]
   );
@@ -123,6 +125,22 @@ const Dashboard = () => {
       await reload();
     } catch (error) {
       alert(error.message || "Could not move this item.");
+    }
+  };
+
+  const handleTogglePurchased = async (item, checked) => {
+    if (!item?.item_id) return;
+    setTogglingPurchasedId(item.item_id);
+    try {
+      await apiRequest(`/api/cart-items/${item.item_id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ purchased: !!checked }),
+      });
+      await reload();
+    } catch (error) {
+      alert(error.message || "Could not update purchase status.");
+    } finally {
+      setTogglingPurchasedId(null);
     }
   };
 
@@ -248,6 +266,15 @@ const Dashboard = () => {
                     <p className="mt-1 text-[11px] font-semibold text-slate-500">
                       {item.is_purchased ? "Purchased" : "In cart"}
                     </p>
+                    <label className="mt-1 flex items-center gap-2 text-[11px] font-semibold text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={!!item.is_purchased}
+                        disabled={togglingPurchasedId === item.item_id}
+                        onChange={(e) => handleTogglePurchased(item, e.target.checked)}
+                      />
+                      Mark purchased
+                    </label>
                     <div className="mt-2 flex flex-col gap-1">
                       <select
                         className="w-full min-w-0 rounded-md border border-slate-300 px-2 py-1 text-xs"
