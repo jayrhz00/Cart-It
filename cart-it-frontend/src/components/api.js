@@ -1,4 +1,8 @@
-const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:3000";
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  (process.env.NODE_ENV === "development"
+    ? "http://127.0.0.1:5001"
+    : "https://cart-it.onrender.com");
 
 export async function apiRequest(path, options = {}) {
   const token = localStorage.getItem("token");

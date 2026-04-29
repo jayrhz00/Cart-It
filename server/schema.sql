@@ -92,6 +92,10 @@ CREATE TABLE IF NOT EXISTS cart_items
     store VARCHAR(100),                                          -- Store/website name (ex: Gymshark, Walmart)
     current_price NUMERIC(10,2),                                 -- Current price of item (changes over time)
     is_in_stock BOOLEAN DEFAULT TRUE NOT NULL,                   -- Tracks current stock state from product page checks
+    -- STUDENT NOTE: JSON responses ALSO echo friendly aliases from index.ts:
+    --   `out_of_stock` == NOT is_in_stock
+    --   `purchased`    == is_purchased
+    -- The database keeps the original column names so older queries keep working.
     notes TEXT,                                                  -- Private internal notes (size, quality, etc.)
     group_comments TEXT,                                         -- Shared notes visible to all collaborators on this wishlist
     is_purchased BOOLEAN DEFAULT FALSE NOT NULL,                 -- Tracks if user bought the item, Default = false cannot be NULL

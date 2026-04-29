@@ -575,6 +575,7 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
       item_name,
       product_url: productUrl,
       current_price: safePrice,
+      price: safePrice,
       image_url: (cap && cap.image_url ? String(cap.image_url) : "").trim() || null,
       store: (cap && cap.store ? String(cap.store) : "").trim() || null,
       is_in_stock: Boolean(cap?.is_in_stock !== false),
@@ -686,12 +687,11 @@ async function init() {
   ]);
   const apiEl = document.getElementById("apiBase");
   const normalizedStored = (stored || "").trim().replace(/\/$/, "");
-  const shouldMigrate =
-    !normalizedStored ||
-    normalizedStored === FALLBACK_LOCAL_API ||
-    normalizedStored === "http://localhost:5001";
-  const resolvedBase = shouldMigrate ? DEFAULT_API : normalizedStored;
-  await chrome.storage.local.set({ apiBase: resolvedBase });
+  // Only default when nothing is saved — never overwrite explicit local URLs on each open.
+  const resolvedBase = normalizedStored || DEFAULT_API;
+  if (!normalizedStored) {
+    await chrome.storage.local.set({ apiBase: resolvedBase });
+  }
   if (apiEl) apiEl.value = resolvedBase;
 
   const defaultWeb =

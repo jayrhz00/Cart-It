@@ -6,20 +6,8 @@
   /* Main Layout */
   .dashboard-container { @apply flex min-h-screen bg-[#4A103D] text-white; }
 
-  /* Sidebar */
-  .dash-sidebar { @apply w-64 bg-white text-black p-8 flex flex-col justify-between; }
-  .sidebar-logo { @apply h-24 w-auto object-contain mb-8; }
-  .sidebar-nav-item { @apply w-full flex items-center gap-2 cursor-pointer hover:text-orange-500 transition-colors text-left bg-transparent border-0 p-0; }
-  
-  /* Extension Card Style */
-  .extension-card { @apply bg-orange-50 p-4 rounded-2xl border border-orange-100 mt-8 mb-4 text-center; }
-  .extension-title { @apply font-bold text-sm mb-2 text-gray-800; }
-  .extension-btn { 
-    @apply w-full flex flex-row items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold 
-    bg-[#DB8046] text-white transition-all duration-200 
-    hover:bg-[#4A103D] hover:text-white whitespace-nowrap; 
-  }
-  .logout-btn { @apply flex items-center gap-2 text-red-500 font-semibold mt-auto; }
+  /* Item Card Style */
+  .cart-grid { @apply grid grid-cols-4 gap-4; }
 
   /* Main Area */
   .dash-main { @apply flex-1 p-12; }
@@ -27,41 +15,17 @@
 
   /* Wishlist Section */
   .wishlist-section { @apply space-y-6 mb-12; }
-  .wishlist-title { @apply text-2xl font-bold italic; }
-  .wishlist-subtitle { @apply text-xl font-bold italic mt-2; }
+  .dash-wishlist-title { @apply text-2xl font-bold italic text-white; }
   .wishlist-grid { @apply grid grid-cols-5 gap-6; }
-  .shared-wishlist-grid { @apply mt-2; }
   
   .create-wishlist-btn { @apply h-48 bg-[#DB8046] p-6 rounded-[40px] flex flex-col items-center justify-center space-y-3 transition-transform hover:scale-105; }
   .create-wishlist-label { @apply text-xs italic font-semibold; }
   
-  .wishlist-card {
-    @apply bg-white border-4 border-white rounded-t-3xl rounded-b-lg p-4 flex flex-col items-center text-left transition-transform hover:scale-[1.02];
-    width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-  }
-  .wishlist-card-active { @apply ring-2 ring-orange-300; }
+  .wishlist-card { @apply bg-white rounded-t-3xl rounded-b-lg p-2 flex flex-col items-center; }
   .wishlist-img-placeholder { @apply w-28 h-28 bg-[#DB8046] rounded-t-2xl rounded-b-md flex items-center justify-center; }
-  .wishlist-mosaic { @apply w-28 h-28 grid grid-cols-2 grid-rows-2 gap-1 rounded-t-2xl rounded-b-md overflow-hidden bg-[#DB8046]/15; }
-  .wishlist-mosaic-cell { @apply w-full h-full; }
-  .wishlist-mosaic-img { @apply object-cover; }
-  .wishlist-mosaic-placeholder { @apply bg-[#DB8046]; }
-  .wishlist-card-footer { @apply w-full flex flex-col items-start px-1 py-1 mt-1 gap-1; }
-  .wishlist-card-name { @apply font-bold text-black break-words leading-tight; }
-  .wishlist-visibility-badge { @apply text-[11px] font-semibold text-orange-700; }
-  .wishlist-item-count { @apply font-normal italic text-[#7C8188] leading-tight; }
-  .wishlist-card-actions {
-    @apply mt-1 flex items-center gap-2 w-full;
-    flex-wrap: wrap;
-    justify-content: flex-start;
-  }
-  .wishlist-mini-btn {
-    @apply inline-flex items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 text-xs font-semibold px-2 py-1;
-    flex: 1 1 0;
-    min-width: 0;
-  }
-  .wishlist-mini-danger { @apply text-red-700 border-red-200 bg-red-50 hover:bg-red-100; }
+  .wishlist-card-footer { @apply w-full flex justify-between items-center px-1 py-1 mt-1; }
+  .wishlist-card-name { @apply font-bold text-black; }
+  .wishlist-item-count { @apply font-normal italic text-[#7C8188]; }
 
   .empty-state { 
     @apply h-48 col-span-4 flex items-center justify-center text-white/50 italic text-lg py-10 border-2 border-dashed border-white/20 rounded-[40px]; 
@@ -86,42 +50,6 @@
   .box-placeholder { @apply h-20 bg-white/20 rounded-xl; }
   .cart-grid { @apply grid grid-cols-4 gap-4; }
   .cart-placeholder { @apply h-16 bg-white/20 rounded-lg; }
-  .selected-items-card { @apply mb-8; }
-  .selected-items-grid { @apply grid grid-cols-2 md:grid-cols-4 gap-4; }
-  .selected-item { @apply block bg-white rounded-xl p-2 text-black; }
-  .selected-item-link { @apply block text-black no-underline; }
-  .selected-item-image { @apply w-full h-28 object-cover rounded-lg bg-gray-100; }
-  .selected-item-image-fallback { @apply flex items-center justify-center text-sm text-gray-500; }
-  .selected-item-name { @apply mt-2 text-sm font-semibold leading-tight line-clamp-2; }
-  .selected-item-price { @apply mt-1 text-sm font-bold text-slate-800; }
-  .selected-item-out { @apply mt-1 text-[11px] font-bold uppercase tracking-wide text-red-700; }
-  .selected-item-notes { @apply mt-1 text-xs text-slate-600 leading-snug line-clamp-2; }
-  .selected-item-actions { @apply mt-2 flex flex-col gap-2; }
-  .item-action-btn { @apply w-full text-xs font-semibold py-1.5 px-2 rounded-md bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200; }
-  .item-action-danger { @apply text-red-700 border-red-200 bg-red-50 hover:bg-red-100; }
-  .selected-controls { @apply mb-4 flex flex-col gap-2; }
-  .selected-controls-label { @apply text-xs uppercase tracking-wide text-white/80; }
-  .selected-controls-select { @apply w-full max-w-[220px] text-black rounded-md border border-orange-200 px-2 py-1.5; }
-  .selected-controls-help { @apply text-xs text-white/80; }
-  .invite-row { @apply flex flex-col sm:flex-row gap-2 mt-1; }
-  .invite-input { @apply flex-1 text-black rounded-md border border-orange-200 px-2 py-1.5; }
-  .invite-btn { @apply sm:w-auto bg-white text-orange-700 border border-orange-200 rounded-md px-3 py-1.5 font-semibold text-sm hover:bg-orange-50; }
-  .selected-empty-state { @apply col-span-full border-white/30; }
-  .analytics-grid { @apply grid grid-cols-2 gap-4; }
-  .analytics-stat { @apply bg-white/20 rounded-xl p-3 flex flex-col gap-1; }
-  .analytics-label { @apply text-xs uppercase tracking-wide text-white/80; }
-  .analytics-value { @apply text-lg font-bold text-white; }
-  .analytics-stat-wide { @apply col-span-2; }
-  .recent-items-grid { @apply grid grid-cols-2 md:grid-cols-4 gap-4; }
-  .recent-item { @apply block bg-white rounded-xl p-2 text-black no-underline; }
-  .recent-item-image { @apply w-full h-24 object-cover rounded-lg bg-gray-100; }
-  .recent-item-image-fallback { @apply flex items-center justify-center text-sm text-gray-500; }
-  .recent-item-name { @apply mt-2 text-sm font-semibold leading-tight line-clamp-2; }
-  .recent-item-price { @apply mt-1 text-sm font-bold text-slate-800; }
-  .recent-item-out { @apply mt-1 text-[11px] font-bold uppercase tracking-wide text-red-700; }
-  .recent-item-notes { @apply mt-1 text-xs text-slate-600 leading-snug line-clamp-2; }
-  .notifications-card { @apply mt-8; }
-  .notifications-list { @apply grid gap-3; }
-  .notification-item { @apply bg-white/15 rounded-lg p-3; }
-  .notification-message { @apply text-sm text-white; }
+  .cart-item-card { @apply bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-1; }
+
 }

@@ -1,617 +1,314 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  LuLayoutDashboard, 
-  LuShoppingCart, 
-  LuChartArea, 
-  LuCirclePlus, 
-  LuLogOut,
-  LuDownload
-} from "react-icons/lu";
+import Sidebar from './sidebar';
+import { LuCirclePlus } from "react-icons/lu";
 import '../styles/dashboard.css';
 import { apiRequest } from './api';
 
-/* Serves as the main landing screen for authenticated users.
- * Features navigation, wishlists, analytics, and cart management.
- */
+const formatMoney = (n) => {
+  const v = Number(n);
+  return Number.isFinite(v) ? `$${v.toFixed(2)}` : "$0.00";
+};
 
 const Dashboard = () => {
-  const navigate = useNavigate();  // Navigation hook for redirecting
+  const navigate = useNavigate();
   const [user, setUser] = useState(null);
-  
-  // State for wishlists - initialized as empty array 
-  const [wishlists, setWishlists] = useState([]); 
+  const [wishlists, setWishlists] = useState([]);
   const [cartItems, setCartItems] = useState([]);
-  const [groupMembers, setGroupMembers] = useState([]);
-  const [notifications, setNotifications] = useState([]);
-  const [selectedGroupId, setSelectedGroupId] = useState(null);
-
-  // State for modals (creating new wishlist)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newWishlistName, setNewWishlistName] = useState("");
   const [newWishlistVisibility, setNewWishlistVisibility] = useState("Private");
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteStatus, setInviteStatus] = useState("");
+  const [moveTargets, setMoveTargets] = useState({});
 
-  const reloadDashboardData = async () => {
-    const [meData, groupData, itemData, memberData, notificationData] = await Promise.all([
-      apiRequest('/api/me'),
-      apiRequest('/api/groups'),
-      apiRequest('/api/cart-items'),
-      apiRequest('/api/group-members').catch(() => []),
-      apiRequest('/api/notifications').catch(() => []),
+  const reload = useCallback(async () => {
+    const [groups, items] = await Promise.all([
+      apiRequest("/api/groups"),
+      apiRequest("/api/cart-items"),
     ]);
-    setUser(meData.user);
-    localStorage.setItem('user', JSON.stringify(meData.user));
-    setWishlists(groupData);
-    setCartItems(itemData);
-    setGroupMembers(Array.isArray(memberData) ? memberData : []);
-    setNotifications(Array.isArray(notificationData) ? notificationData : []);
-  };
+    setWishlists(Array.isArray(groups) ? groups : []);
+    setCartItems(Array.isArray(items) ? items : []);
+  }, []);
 
-  // On component mount, check for user authentication
   useEffect(() => {
-    const savedUser = localStorage.getItem('user');
-    
-    // Redirect to login if no user is found in local storage
+    const savedUser = localStorage.getItem("user");
     if (!savedUser) {
-      navigate('/login');
-    } else {
-      const user = JSON.parse(savedUser);
-      setUser(user);
-        
-        // Fetch wishlists from database
-      reloadDashboardData()
-        .catch(err => console.error("Error fetching dashboard data:", err));
+      navigate("/login");
+      return;
     }
-  }, [navigate]);
+    setUser(JSON.parse(savedUser));
+    reload().catch((err) => console.error("Dashboard load failed:", err));
+  }, [navigate, reload]);
 
-  // Clears storage and sends user back to landing page
-  const handleLogout = () => {
-    localStorage.clear();
-    navigate('/');
-  };
+  const groupItemCount = useCallback(
+    (groupId) =>
+      cartItems.filter((i) => Number(i.group_id) === Number(groupId)).length,
+    [cartItems]
+  );
 
-  // Opens the create wishlist modal
+  const recentItems = useMemo(
+    () =>
+      [...cartItems].sort(
+        (a, b) => Number(b.item_id || 0) - Number(a.item_id || 0)
+      ),
+    [cartItems]
+  );
+
+  const analyticsSnapshot = useMemo(() => {
+    const open = cartItems.filter((i) => !i.is_purchased);
+    const purchased = cartItems.filter((i) => i.is_purchased);
+    const openValue = open.reduce(
+      (s, i) => s + Number(i.current_price || 0),
+      0
+    );
+    const spent = purchased.reduce(
+      (s, i) =>
+        s + Number(i.purchase_price ?? i.current_price ?? 0),
+      0
+    );
+    return {
+      totalItems: cartItems.length,
+      openCount: open.length,
+      purchasedCount: purchased.length,
+      openValue,
+      spent,
+    };
+  }, [cartItems]);
+
   const handleSaveWishlist = async () => {
-    if (newWishlistName.trim()) {
-      // Send new wishlist data to backend API
-      try {
-        const response = await apiRequest('/api/groups', {
-          method: 'POST',
-          body: JSON.stringify({ 
-          group_name: newWishlistName,
+    const name = newWishlistName.trim();
+    if (!name) return;
+    try {
+      const data = await apiRequest("/api/groups", {
+        method: "POST",
+        body: JSON.stringify({
+          group_name: name,
           visibility: newWishlistVisibility,
         }),
-        });
-        const newWishlist = response.group || response;
-        setWishlists([...wishlists, newWishlist]);
-        setNewWishlistName("");
-        setNewWishlistVisibility("Private");
-        setIsModalOpen(false);
-      } catch (error) {
-        console.error("Error creating wishlist:", error);
-        alert(error.message || "Server error. Please try again later.");
-      }
-    }
-  };
-
-  const getCollaboratorCount = (groupId) => {
-    const byGroup = groupMembers.filter((m) => m.group_id === groupId);
-    const nonOwners = byGroup.filter((m) => String(m.role || "").toLowerCase() !== "owner");
-    const uniqueUsers = new Set(nonOwners.map((m) => m.user_id));
-    return uniqueUsers.size;
-  };
-
-  const handleDeleteItem = async (itemId) => {
-    const confirmDelete = window.confirm("Delete this item from your wishlist?");
-    if (!confirmDelete) return;
-    try {
-      await apiRequest(`/api/cart-items/${itemId}`, { method: "DELETE" });
-      await reloadDashboardData();
-    } catch (error) {
-      alert(error.message || "Could not delete item.");
-    }
-  };
-
-  const handleEditNotes = async (item) => {
-    const current = item.notes || "";
-    const next = window.prompt("Edit notes for this item:", current);
-    if (next === null) return;
-    try {
-      await apiRequest(`/api/cart-items/${item.item_id}/notes`, {
-        method: "PATCH",
-        body: JSON.stringify({ notes: next.trim() || null }),
       });
-      await reloadDashboardData();
+      const g = data.group || data;
+      setWishlists((prev) => [...prev, g]);
+      setNewWishlistName("");
+      setNewWishlistVisibility("Private");
+      setIsModalOpen(false);
+      await reload();
     } catch (error) {
-      alert(error.message || "Could not update notes.");
+      console.error("Create wishlist failed:", error);
+      alert(error.message || "Could not create wishlist.");
     }
   };
 
-  const handleTogglePurchased = async (item) => {
-    const target = !item.is_purchased;
-    let purchasePrice = item.purchase_price ?? item.current_price ?? 0;
-    if (target) {
-      const entered = window.prompt("Enter purchase price:", String(purchasePrice));
-      if (entered === null) return;
-      const parsed = Number(entered);
-      if (!Number.isFinite(parsed) || parsed < 0) {
-        alert("Please enter a valid non-negative purchase price.");
-        return;
-      }
-      purchasePrice = parsed;
+  const normalizeSidebarLists = useMemo(
+    () =>
+      wishlists.map((w) => ({
+        id: w.group_id ?? w.id,
+        name: w.group_name ?? w.name ?? "Untitled",
+      })),
+    [wishlists]
+  );
+
+  const handleMoveItemToWishlist = async (item, targetGroupId) => {
+    if (!item) return;
+    const parsed = Number(targetGroupId);
+    if (!Number.isFinite(parsed)) {
+      alert("Choose a wishlist first.");
+      return;
     }
+    const targetGroup = parsed === 0 ? null : parsed;
     try {
       await apiRequest(`/api/cart-items/${item.item_id}`, {
         method: "PATCH",
-        body: JSON.stringify({
-          is_purchased: target,
-          purchase_price: target ? purchasePrice : null,
-        }),
+        body: JSON.stringify({ group_id: targetGroup }),
       });
-      await reloadDashboardData();
+      setMoveTargets((prev) => ({ ...prev, [item.item_id]: "" }));
+      await reload();
     } catch (error) {
-      alert(error.message || "Could not update purchase status.");
+      alert(error.message || "Could not move this item.");
     }
-  };
-
-  const handleVisibilityChange = async (groupId, visibility) => {
-    try {
-      await apiRequest(`/api/groups/${groupId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ visibility }),
-      });
-      await reloadDashboardData();
-    } catch (error) {
-      alert(error.message || "Could not update wishlist visibility.");
-    }
-  };
-
-  const handleRenameWishlist = async (group) => {
-    const currentName = String(group?.group_name || group?.name || "").trim();
-    const nextName = window.prompt("Rename wishlist:", currentName);
-    if (nextName == null) return;
-    const trimmed = nextName.trim();
-    if (!trimmed) {
-      alert("Wishlist name cannot be empty.");
-      return;
-    }
-    if (trimmed === currentName) return;
-    try {
-      await apiRequest(`/api/groups/${group.group_id ?? group.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ group_name: trimmed }),
-      });
-      await reloadDashboardData();
-    } catch (error) {
-      alert(error.message || "Could not rename wishlist.");
-    }
-  };
-
-  const handleDeleteWishlist = async (group) => {
-    if (!group) return;
-    const listId = group.group_id ?? group.id;
-    const listName = String(group.group_name ?? group.name ?? "this wishlist");
-    if (!window.confirm(`Delete "${listName}"? This cannot be undone.`)) return;
-    try {
-      await apiRequest(`/api/groups/${listId}`, { method: "DELETE" });
-      if (selectedGroupId === listId) {
-        setSelectedGroupId(null);
-      }
-      await reloadDashboardData();
-    } catch (error) {
-      alert(error.message || "Could not delete wishlist.");
-    }
-  };
-
-  const handleInviteMember = async () => {
-    const email = inviteEmail.trim();
-    if (!email || selectedGroupId == null) {
-      setInviteStatus("Enter a collaborator email first.");
-      return;
-    }
-    try {
-      const data = await apiRequest(`/api/groups/${selectedGroupId}/invite`, {
-        method: "POST",
-        body: JSON.stringify({ email, role: "Editor" }),
-      });
-      setInviteStatus(data?.message || "Invite sent.");
-      setInviteEmail("");
-      await reloadDashboardData();
-    } catch (error) {
-      const msg = error.message || "Could not send invite.";
-      if (/404/.test(msg)) {
-        setInviteStatus("Invite API not available in backend yet. Redeploy latest backend and try again.");
-      } else {
-        setInviteStatus(msg);
-      }
-    }
-  };
-
-  const selectedItems =
-    selectedGroupId == null
-      ? []
-      : cartItems.filter((item) => item.group_id === selectedGroupId);
-  const myId = user?.userId ?? user?.user_id ?? user?.id ?? null;
-  const privateWishlists = wishlists.filter((list) => {
-    if (myId != null && list.owner_id != null && list.owner_id !== myId) return false;
-    return String(list.visibility || "Private").toLowerCase() !== "shared";
-  });
-  const sharedWishlists = wishlists.filter((list) => {
-    if (String(list.visibility || "").toLowerCase() !== "shared") return false;
-    if (myId == null) return true;
-    if (list.owner_id === myId) return true;
-    return String(list.access_role || "").toLowerCase() === "editor";
-  });
-  const selectedGroup = wishlists.find((list) => (list.group_id ?? list.id) === selectedGroupId);
-  const isSelectedShared =
-    String(selectedGroup?.visibility || "").trim().toLowerCase() === "shared";
-  const uncategorizedItems = cartItems.filter((item) => item.group_id == null);
-  const purchasedItems = cartItems.filter((item) => Boolean(item.is_purchased));
-  const openItems = cartItems.filter((item) => !item.is_purchased);
-  const openValue = openItems.reduce((sum, item) => sum + Number(item.current_price || 0), 0);
-  const spentValue = purchasedItems.reduce(
-    (sum, item) => sum + Number(item.purchase_price ?? item.current_price ?? 0),
-    0
-  );
-  const recentItems = useMemo(() => [...cartItems].sort((a, b) => (b.item_id || 0) - (a.item_id || 0)), [cartItems]);
-
-  const jumpTo = (targetId) => {
-    const el = document.getElementById(targetId);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-
-  const isOwnerForList = (list) => {
-    const ownerId = list?.owner_id ?? list?.ownerId ?? null;
-    const accessRole = String(list?.access_role ?? list?.role ?? "").toLowerCase();
-    if (accessRole === "owner") return true;
-    if (myId == null || ownerId == null) return false;
-    return String(ownerId) === String(myId);
-  };
-
-  const renderWishlistCard = (list) => {
-    const listId = list.group_id ?? list.id;
-    const listName = list.group_name ?? list.name ?? "Untitled";
-    const isListOwner = isOwnerForList(list);
-    const listItems = cartItems.filter((item) => item.group_id === listId);
-    const itemCount = listItems.length;
-    const previewImages = listItems
-      .map((item) => item.image_url)
-      .filter(Boolean)
-      .slice(0, 4);
-    const isSelected = selectedGroupId === listId;
-    const visibility = list.visibility || "Private";
-    const collaborators = getCollaboratorCount(listId);
-    return (
-      <button
-        key={listId}
-        className={`wishlist-card ${isSelected ? "wishlist-card-active" : ""}`}
-        onClick={() => {
-          setSelectedGroupId(null);
-          navigate(`/wishlist/${listId}`);
-          setTimeout(() => {
-            if (window.location.pathname !== `/wishlist/${listId}`) {
-              window.location.assign(`/wishlist/${listId}`);
-            }
-          }, 120);
-        }}
-        type="button"
-      >
-        <div className="wishlist-mosaic" aria-hidden="true">
-          {Array.from({ length: 4 }).map((_, idx) => {
-            const src = previewImages[idx];
-            return src ? (
-              <img key={idx} src={src} alt="" className="wishlist-mosaic-cell wishlist-mosaic-img" />
-            ) : (
-              <div key={idx} className="wishlist-mosaic-cell wishlist-mosaic-placeholder" />
-            );
-          })}
-        </div>
-        <div className="wishlist-card-footer">
-          <span className="wishlist-card-name">{listName}</span>
-          <span className="wishlist-visibility-badge">
-            {visibility}
-            {visibility === "Shared" ? ` • ${collaborators} collaborator${collaborators === 1 ? "" : "s"}` : ""}
-          </span>
-          <span className="wishlist-item-count">{itemCount} {itemCount === 1 ? "item" : "items"}</span>
-          {isListOwner ? (
-            <div className="wishlist-card-actions">
-              {String(visibility).toLowerCase() === "shared" ? (
-                <button
-                  type="button"
-                  className="wishlist-mini-btn"
-                  aria-label={`Invite collaborators to ${listName}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate(`/wishlist/${listId}`);
-                  }}
-                >
-                  Invite
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="wishlist-mini-btn"
-                aria-label={`Rename ${listName}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleRenameWishlist(list);
-                }}
-              >
-                Rename
-              </button>
-              <button
-                type="button"
-                className="wishlist-mini-btn wishlist-mini-danger"
-                aria-label={`Delete ${listName}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDeleteWishlist(list);
-                }}
-              >
-                Delete
-              </button>
-            </div>
-          ) : null}
-        </div>
-      </button>
-    );
   };
 
   return (
     <div className="dashboard-container">
-      {/* Sidebar */}
-      <aside className="dash-sidebar">
-        <div>
-          <img src="/logo.png" alt="Cart-It Logo" className="sidebar-logo" />
-          
-          <div className="space-y-4">
-            <button className="sidebar-nav-item" type="button" onClick={() => jumpTo("topSection")}>
-              <LuLayoutDashboard /> Dashboard
-            </button>
-            <button className="sidebar-nav-item" type="button" onClick={() => navigate("/cart")}>
-              <LuShoppingCart /> Cart
-            </button>
-            <button className="sidebar-nav-item" type="button" onClick={() => navigate("/analytics")}>
-              <LuChartArea /> Spending Analytics
-            </button>
-          </div>
+      <Sidebar wishlists={normalizeSidebarLists} showExtension={true} />
 
-          <div className="extension-card">
-            <p className="extension-title">Get the Extension</p>
-            <button
-              className="extension-btn"
-              type="button"
-              onClick={() => window.open("/extension-install.html", "_blank", "noopener,noreferrer")}
-            >
-              <LuDownload size={14} /> Download
-            </button>
-          </div>
-        </div>
-        
-        {/* Logout action */}
-        <button className="logout-btn" onClick={handleLogout}>
-          <LuLogOut /> Log Out
-        </button>
-      </aside>
-      
-      {/* Main Content Area */}
       <main className="dash-main">
-        {/* Dynamic greeting: prevents crash if user is still loading */}
-        <h1 className="dash-title">Hello, {user ? user.username : 'User'}</h1>
+        <h1 className="dash-title">
+          Hello, {user ? user.username : "User"}
+        </h1>
 
-        {/* Wishlists Section */}
-        <section className="wishlist-section" id="topSection">
-          <h2 className="wishlist-title">My Wishlists</h2>
+        <section className="wishlist-section">
+          <h2 className="dash-wishlist-title">My Wishlists</h2>
           <div className="wishlist-grid">
-            
-            {/* Trigger Modal */}
-            <button onClick={() => setIsModalOpen(true)} className="create-wishlist-btn">
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(true)}
+              className="create-wishlist-btn"
+            >
               <LuCirclePlus className="text-5xl" />
               <span className="create-wishlist-label">Create New Wishlist</span>
             </button>
 
-            {/* Display private wishlists or a placeholder if none exist */}
-            {privateWishlists.length > 0 ? (
-              privateWishlists.map((list) => renderWishlistCard(list))
+            {wishlists.length > 0 ? (
+              wishlists.map((list) => {
+                const id = list.group_id ?? list.id;
+                const label = list.group_name ?? list.name ?? "Untitled";
+                const n = groupItemCount(id);
+                const visibility = String(list.visibility || "Private");
+                return (
+                  <button
+                    type="button"
+                    key={id}
+                    className="wishlist-card"
+                    onClick={() => navigate(`/wishlist/${id}`)}
+                  >
+                    <div className="wishlist-img-placeholder" />
+                    <div className="wishlist-card-footer">
+                      <span className="wishlist-card-name">{label}</span>
+                      <span className="text-[11px] font-semibold text-orange-700">
+                        {visibility}
+                      </span>
+                      <span className="wishlist-item-count">
+                        {n} {n === 1 ? "item" : "items"}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })
             ) : (
               <div className="empty-state">
-                No private wishlists yet.
-              </div>
-            )}
-          </div>
-          <h3 className="wishlist-subtitle">Shared Wishlists</h3>
-          <div className="wishlist-grid shared-wishlist-grid">
-            {sharedWishlists.length > 0 ? (
-              sharedWishlists.map((list) => renderWishlistCard(list))
-            ) : (
-              <div className="empty-state">
-                No shared wishlists yet.
+                No wishlists yet — start by creating one.
               </div>
             )}
           </div>
         </section>
 
-        {selectedGroupId != null && (
-          <section className="dashboard-card selected-items-card">
-            <h2 className="card-header">
-              Items in {selectedGroup?.group_name || selectedGroup?.name || "selected wishlist"}
-            </h2>
-            <div className="selected-controls">
-              <label htmlFor="visibilitySelect" className="selected-controls-label">Visibility</label>
-              <select
-                id="visibilitySelect"
-                className="selected-controls-select"
-                value={selectedGroup?.visibility || "Private"}
-                onChange={(e) => handleVisibilityChange(selectedGroupId, e.target.value)}
-              >
-                <option value="Private">Private</option>
-                <option value="Shared">Shared</option>
-              </select>
-              <span className="selected-controls-help">
-                {isSelectedShared
-                  ? "Shared wishlist (invite collaborators by email below)."
-                  : "Private wishlist (only you can see items)."}
-              </span>
-              <button
-                type="button"
-                className="invite-btn"
-                onClick={() => handleRenameWishlist(selectedGroup)}
-              >
-                Rename wishlist
-              </button>
-              {isSelectedShared && (
-                <>
-                  <div className="invite-row">
-                    <input
-                      type="email"
-                      className="invite-input"
-                      placeholder="Invite collaborator by email"
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                    />
-                    <button type="button" className="invite-btn" onClick={handleInviteMember}>
-                      Invite
-                    </button>
-                  </div>
-                  {inviteStatus ? <span className="selected-controls-help">{inviteStatus}</span> : null}
-                </>
-              )}
+        <section className="info-grid">
+          <div className="dashboard-card">
+            <h2 className="card-header">Spending Analytics</h2>
+            <div className="grid grid-cols-2 gap-4 text-left text-sm text-white">
+              <div>
+                <div className="opacity-80">Total items</div>
+                <div className="text-lg font-bold">
+                  {analyticsSnapshot.totalItems}
+                </div>
+              </div>
+              <div>
+                <div className="opacity-80">Active cart items</div>
+                <div className="text-lg font-bold">
+                  {analyticsSnapshot.openCount}
+                </div>
+              </div>
+              <div>
+                <div className="opacity-80">Purchased</div>
+                <div className="text-lg font-bold">
+                  {analyticsSnapshot.purchasedCount}
+                </div>
+              </div>
+              <div>
+                <div className="opacity-80">Current cart value</div>
+                <div className="text-lg font-bold">
+                  {formatMoney(analyticsSnapshot.openValue)}
+                </div>
+              </div>
+              <div className="col-span-2">
+                <div className="opacity-80">Total spent (purchased)</div>
+                <div className="text-lg font-bold">
+                  {formatMoney(analyticsSnapshot.spent)}
+                </div>
+              </div>
             </div>
-            {selectedItems.length > 0 ? (
-              <div className="selected-items-grid">
-                {selectedItems.map((item) => (
-                  <div
-                    key={item.item_id}
-                    className="selected-item"
-                  >
-                    <a href={item.product_url} target="_blank" rel="noreferrer" className="selected-item-link">
-                    {item.image_url ? (
-                      <img src={item.image_url} alt={item.item_name} className="selected-item-image" />
-                    ) : (
-                      <div className="selected-item-image selected-item-image-fallback">No image</div>
-                    )}
-                    <div className="selected-item-name">{item.item_name}</div>
-                    <div className="selected-item-price">${Number(item.current_price || 0).toFixed(2)}</div>
-                    {item.is_in_stock === false ? (
-                      <div className="selected-item-out">Out of stock</div>
-                    ) : null}
-                    {item.notes ? <div className="selected-item-notes">Note: {item.notes}</div> : null}
-                    </a>
-                    <div className="selected-item-actions">
-                      <button type="button" className="item-action-btn" onClick={() => handleEditNotes(item)}>
-                        Edit notes
-                      </button>
-                      <button type="button" className="item-action-btn" onClick={() => handleTogglePurchased(item)}>
-                        {item.is_purchased ? "Mark unpurchased" : "Mark purchased"}
-                      </button>
-                      <button type="button" className="item-action-btn item-action-danger" onClick={() => handleDeleteItem(item.item_id)}>
-                        Delete
+            <button
+              type="button"
+              className="mt-4 w-full rounded-lg bg-white/20 py-2 text-sm font-semibold text-white hover:bg-white/30"
+              onClick={() => navigate("/analytics")}
+            >
+              Open full analytics
+            </button>
+          </div>
+
+          <div className="dashboard-card">
+            <h2 className="card-header">Recent Cart Items</h2>
+            <div className="cart-grid">
+              {recentItems.length > 0 ? (
+                recentItems.slice(0, 8).map((item) => (
+                  <div key={item.item_id} className="cart-item-card text-left text-black">
+                    <img
+                      src={item.image_url || "/logo.png"}
+                      alt={item.item_name || "Item"}
+                      className="h-20 w-full rounded object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = "/logo.png";
+                      }}
+                    />
+                    <p className="truncate text-sm font-bold">
+                      {item.item_name}
+                    </p>
+                    <p className="text-sm font-semibold">
+                      {formatMoney(item.current_price)}
+                    </p>
+                    <p className="mt-1 text-[11px] font-semibold text-slate-500">
+                      {item.is_purchased ? "Purchased" : "In cart"}
+                    </p>
+                    <div className="mt-2 flex flex-col gap-1">
+                      <select
+                        className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                        value={moveTargets[item.item_id] ?? ""}
+                        onChange={(e) =>
+                          setMoveTargets((prev) => ({
+                            ...prev,
+                            [item.item_id]: e.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Select wishlist</option>
+                        <option value="0">No wishlist (cart only)</option>
+                        {wishlists.map((w) => {
+                          const id = w.group_id ?? w.id;
+                          const name = w.group_name ?? w.name ?? "Untitled";
+                          return (
+                            <option key={id} value={id}>
+                              {name}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <button
+                        type="button"
+                        className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                        onClick={() =>
+                          handleMoveItemToWishlist(item, moveTargets[item.item_id])
+                        }
+                      >
+                        Move
                       </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="empty-state selected-empty-state">No items in this wishlist yet.</div>
-            )}
-          </section>
-        )}
-
-        {/* Analytics and Recent Items Section */}
-        <section className="info-grid">
-          <div className="dashboard-card" id="analyticsSection">
-            <h2 className="card-header">Spending Analytics</h2>
-            <div className="analytics-grid">
-              <div className="analytics-stat">
-                <span className="analytics-label">Total items</span>
-                <span className="analytics-value">{cartItems.length}</span>
-              </div>
-              <div className="analytics-stat">
-                <span className="analytics-label">Open wishlist items</span>
-                <span className="analytics-value">{openItems.length}</span>
-              </div>
-              <div className="analytics-stat">
-                <span className="analytics-label">Purchased items</span>
-                <span className="analytics-value">{purchasedItems.length}</span>
-              </div>
-              <div className="analytics-stat">
-                <span className="analytics-label">Current wishlist value</span>
-                <span className="analytics-value">${openValue.toFixed(2)}</span>
-              </div>
-              <div className="analytics-stat analytics-stat-wide">
-                <span className="analytics-label">Estimated spent total</span>
-                <span className="analytics-value">${spentValue.toFixed(2)}</span>
-              </div>
-              <div className="analytics-stat analytics-stat-wide">
-                <span className="analytics-label">Uncategorized items</span>
-                <span className="analytics-value">{uncategorizedItems.length}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="dashboard-card" id="cartSection">
-            <h2 className="card-header">Recent Cart Items</h2>
-            {recentItems.length > 0 ? (
-              <div className="recent-items-grid">
-                {recentItems.slice(0, 8).map((item) => (
-                  <a
-                    key={item.item_id}
-                    href={item.product_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="recent-item"
-                  >
-                    {item.image_url ? (
-                      <img src={item.image_url} alt={item.item_name} className="recent-item-image" />
-                    ) : (
-                      <div className="recent-item-image recent-item-image-fallback">No image</div>
-                    )}
-                    <div className="recent-item-name">{item.item_name}</div>
-                    <div className="recent-item-price">${Number(item.current_price || 0).toFixed(2)}</div>
-                    {item.is_in_stock === false ? (
-                      <div className="recent-item-out">Out of stock</div>
-                    ) : null}
-                    {item.notes ? <div className="recent-item-notes">Note: {item.notes}</div> : null}
-                  </a>
-                ))}
-              </div>
-            ) : (
-              <div className="empty-state selected-empty-state">No cart items saved yet.</div>
-            )}
-          </div>
-        </section>
-
-        <section className="dashboard-card notifications-card">
-          <h2 className="card-header">Notifications</h2>
-          {notifications.length > 0 ? (
-            <div className="notifications-list">
-              {[...notifications].reverse().slice(0, 8).map((n) => (
-                <div key={n.notification_id} className="notification-item">
-                  <div className="notification-message">{n.message}</div>
+                ))
+              ) : (
+                <div className="col-span-full text-center text-sm text-white/80">
+                  No items yet. Save something with the extension to see it
+                  here.
                 </div>
-              ))}
+              )}
             </div>
-          ) : (
-            <div className="empty-state selected-empty-state">No notifications yet.</div>
-          )}
+          </div>
         </section>
 
-        {/* Custom Modal */}
         {isModalOpen && (
           <div className="modal-overlay">
             <div className="modal-content">
               <h3>Create New Wishlist</h3>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder="Enter wishlist name..."
                 value={newWishlistName}
                 onChange={(e) => setNewWishlistName(e.target.value)}
                 autoFocus
               />
-              <label className="modal-label">Visibility</label>
+              <label className="block text-left text-sm font-medium text-gray-700">
+                Visibility
+              </label>
               <select
+                className="mt-1 rounded-md border border-gray-300 p-2 text-black"
                 value={newWishlistVisibility}
                 onChange={(e) => setNewWishlistVisibility(e.target.value)}
               >
@@ -619,8 +316,20 @@ const Dashboard = () => {
                 <option value="Shared">Shared</option>
               </select>
               <div className="modal-actions">
-                <button onClick={() => setIsModalOpen(false)} className="cancel-btn">Cancel</button>
-                <button onClick={handleSaveWishlist} className="save-btn">Create</button>
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="cancel-btn"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveWishlist}
+                  className="save-btn"
+                >
+                  Create
+                </button>
               </div>
             </div>
           </div>

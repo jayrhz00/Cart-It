@@ -71,11 +71,6 @@ interface UpdateGroupBody {
   visibility?: "Private" | "Shared";
 }
 
-interface InviteGroupMemberBody {
-  email: string;
-  role?: "Editor" | "Owner";
-}
-
 interface GroupCommentBody {
   body?: string;
 }
@@ -86,7 +81,13 @@ interface CreateCartItemBody {
   product_url: string;
   image_url?: string | null;
   store?: string | null;
-  current_price: number;
+  /** Primary field used by the React app + extension today. */
+  current_price?: number;
+  /**
+   * Legacy / alternate name some clients send.
+   * WHY: Early extension drafts used `price`; we still accept it so saves never silently become $0.
+   */
+  price?: number;
   is_in_stock?: boolean;
   notes?: string | null;
 }
@@ -101,7 +102,25 @@ interface UpdateCartItemBody {
   /** Saved only for the authenticated user (item_private_notes). */
   notes?: string | null;
   is_purchased?: boolean;
+  /**
+   * Friendly alias for `is_purchased` (assignment-friendly naming).
+   * WHAT: Same column in Postgres — we map it in the PATCH handler.
+   */
+  purchased?: boolean;
   purchase_price?: number | null;
+  is_in_stock?: boolean;
+  /**
+   * Friendly inverse of `is_in_stock`.
+   * WHAT: `out_of_stock: true` means we set `is_in_stock = false` in the database.
+   */
+  out_of_stock?: boolean;
+}
+
+interface InviteGroupMemberBody {
+  email?: string;
+  /** Optional: invite by Cart-It user id instead of email (useful for demos / internal tools). */
+  user_id?: number;
+  role?: "Editor" | "Owner";
 }
 
 // Custom request type for routes that use JWT
@@ -118,7 +137,19 @@ type AuthRequest<
 // EXPRESS APP SETUP
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
-const PRICE_CHECK_INTERVAL_MINUTES = Number(process.env.PRICE_CHECK_INTERVAL_MINUTES || 180);
+/**
+ * Background job: re-fetches product pages to update price/stock. Handy in production;
+ * for class / local testing you can turn it off so a bad network day does not spam the console.
+ *   PRICE_CHECK_ENABLED=false  OR  PRICE_CHECK_INTERVAL_MINUTES=0
+ */
+const PRICE_CHECK_DISABLED =
+  String(process.env.PRICE_CHECK_ENABLED || "")
+    .toLowerCase()
+    .trim() === "false" ||
+  String(process.env.PRICE_CHECK_INTERVAL_MINUTES || "").trim() === "0";
+const PRICE_CHECK_INTERVAL_MINUTES = PRICE_CHECK_DISABLED
+  ? 0
+  : Number(process.env.PRICE_CHECK_INTERVAL_MINUTES || 180);
 const RESET_PASSWORD_EXP_MINUTES = Math.max(
   5,
   Number(process.env.RESET_PASSWORD_EXP_MINUTES || 30)
@@ -129,6 +160,23 @@ app.use(cors());
 
 // Allow backend to read JSON from req.body
 app.use(express.json());
+
+/**
+ * STUDENT NOTE — why this helper exists
+ *
+ * Postgres column names are `is_purchased` and `is_in_stock` (see schema.sql).
+ * Lab writeups often call the same ideas `purchased` and `out_of_stock`.
+ *
+ * WHAT we do: every cart item JSON going back to the browser includes BOTH naming styles.
+ * WHY: so Postman / extension / frontend teammates can read the payload without guessing internals.
+ */
+function shapeCartItemResponse(row: Record<string, unknown>) {
+  return {
+    ...row,
+    purchased: row.is_purchased === true,
+    out_of_stock: row.is_in_stock === false,
+  };
+}
 
 console.log("index.ts loaded");
 console.log("login route loaded");
@@ -1120,7 +1168,17 @@ app.get("/api/me", authenticateToken, async (req: AuthRequest, res: Response) =>
 // - Wishlist page calls /api/groups/:id for one list and /api/groups/:id/invite for collaboration.
 // - Create modal on dashboard calls POST /api/groups.
 
-// GET groups you own plus shared lists where you are a collaborator
+/**
+ * GET /api/groups — wishlists the logged-in user should see in the sidebar + dashboard.
+ *
+ * WHY two SELECTs glued with UNION ALL:
+ *   1) First branch: lists YOU created (you are always the Owner row in `groups`).
+ *   2) Second branch: lists someone ELSE owns but invited you to — those memberships live in
+ *      `group_members`. Without the JOIN, User B would never see User A's shared list after invite.
+ *
+ * WHAT we return: one combined list, newest first, each row tagged with `access_role` so the UI
+ * can show owner-only controls (rename/delete) vs collaborator controls.
+ */
 app.get("/api/groups", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
@@ -1486,7 +1544,7 @@ app.get("/api/cart-items", authenticateToken, async (req: AuthRequest, res: Resp
         `,
         [userId, gid]
       );
-      return res.status(200).json(result.rows);
+      return res.status(200).json(result.rows.map(shapeCartItemResponse));
     }
 
     const result = await pool.query(
@@ -1530,7 +1588,7 @@ app.get("/api/cart-items", authenticateToken, async (req: AuthRequest, res: Resp
       `,
       [userId]
     );
-    res.status(200).json(result.rows);
+    res.status(200).json(result.rows.map(shapeCartItemResponse));
   } catch (error) {
     console.error("Fetch cart items failed:", error);
     res.status(500).json({ message: "Failed to fetch cart items" });
@@ -1604,7 +1662,16 @@ app.get("/api/price-history", authenticateToken, async (req: AuthRequest, res: R
   }
 });
 
-// Spending / wishlist totals for analytics page
+/**
+ * GET /api/analytics/spending — numbers for charts / dashboard cards.
+ *
+ * WHY not only `current_price` for purchased rows:
+ *   When someone marks an item purchased we store what they *paid* in `purchase_price`
+ *   (falls back to `current_price` if they never filled purchase_price — see PATCH handler).
+ *
+ * WHAT `by_group` answers: "Which wishlist did that money belong to?"
+ *   We GROUP BY `group_id` so NULL (uncategorized / general cart) still shows up as its own bucket.
+ */
 app.get("/api/analytics/spending", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const owner_id = req.user!.userId;
@@ -1645,9 +1712,43 @@ app.get("/api/analytics/spending", authenticateToken, async (req: AuthRequest, r
       [owner_id]
     );
 
+    const byGroup = await pool.query(
+      `
+      SELECT
+        ci.group_id,
+        COALESCE(g.group_name, '(No wishlist / cart only)') AS group_name,
+        COUNT(*) FILTER (WHERE ci.is_purchased = true)::int AS purchased_items,
+        COALESCE(
+          SUM(
+            CASE
+              WHEN ci.is_purchased = true THEN COALESCE(ci.purchase_price, ci.current_price, 0)
+              ELSE 0
+            END
+          ),
+          0
+        )::numeric AS spent_on_purchased,
+        COALESCE(
+          SUM(
+            CASE
+              WHEN ci.is_purchased = false THEN COALESCE(ci.current_price, 0)
+              ELSE 0
+            END
+          ),
+          0
+        )::numeric AS open_value
+      FROM cart_items ci
+      LEFT JOIN groups g ON g.group_id = ci.group_id
+      WHERE ci.user_id = $1
+      GROUP BY ci.group_id, g.group_name
+      ORDER BY spent_on_purchased DESC NULLS LAST, open_value DESC NULLS LAST
+      `,
+      [owner_id]
+    );
+
     return res.status(200).json({
       summary: summary.rows[0],
       by_store: byStore.rows,
+      by_group: byGroup.rows,
     });
   } catch (error) {
     console.error("Analytics spending failed:", error);
@@ -1679,6 +1780,16 @@ app.get("/api/group-members", authenticateToken, async (req: AuthRequest, res: R
   }
 });
 
+/**
+ * POST /api/groups/:id/invite — add a collaborator to a shared wishlist.
+ *
+ * WHAT you can send (pick ONE lookup style — both end up as the same `group_members` row):
+ *   • `{ "email": "friend@school.edu" }` — most human-friendly for demos.
+ *   • `{ "user_id": 12 }` — handy when you already know their Cart-It id from `/api/users` etc.
+ *
+ * WHY we still require an existing Cart-It account:
+ *   Invites attach a real `user_id` foreign key — we cannot invite random emails that are not users yet.
+ */
 app.post(
   "/api/groups/:id/invite",
   authenticateToken,
@@ -1687,13 +1798,18 @@ app.post(
       const group_id = Number(req.params.id);
       const owner_id = req.user!.userId;
       const email = String(req.body?.email || "").trim().toLowerCase();
+      const rawUserId = req.body?.user_id;
       const role = req.body?.role === "Owner" ? "Owner" : "Editor";
 
       if (isNaN(group_id)) {
         return res.status(400).json({ message: "Invalid group ID" });
       }
-      if (!email) {
-        return res.status(400).json({ message: "Invite email is required" });
+      if (!email && (rawUserId === undefined || rawUserId === null)) {
+        return res.status(400).json({ message: "Invite email or user_id is required" });
+      }
+      const numericInviteeId = Number(rawUserId);
+      if (!email && (!Number.isFinite(numericInviteeId) || numericInviteeId < 1)) {
+        return res.status(400).json({ message: "Invalid user_id for invite" });
       }
 
       const ownedGroup = await pool.query(
@@ -1709,9 +1825,16 @@ app.post(
         return res.status(404).json({ message: "Group not found or you do not own it" });
       }
 
-      const invitedUser = await storage.getUserByEmail(email);
+      let invitedUser =
+        email.length > 0
+          ? await storage.getUserByEmail(email)
+          : await storage.getUser(numericInviteeId);
       if (!invitedUser) {
-        return res.status(404).json({ message: "No Cart-It user found for that email yet." });
+        return res.status(404).json({
+          message: email.length > 0
+            ? "No Cart-It user found for that email yet."
+            : "No Cart-It user found for that user_id.",
+        });
       }
       if (invitedUser.user_id === owner_id) {
         return res.status(400).json({ message: "You already own this wishlist." });
@@ -1779,7 +1902,16 @@ app.post(
   }
 );
 
-// Create a wishlist row. User comes from JWT (req.user), NOT from the request body — safer.
+/**
+ * POST /api/cart-items — save a product row (extension + website both hit this).
+ *
+ * WHY user_id never comes from JSON:
+ *   Trust the signed-in user from the JWT only — prevents someone forging saves under another account.
+ *
+ * WHY we accept BOTH `current_price` and `price`:
+ *   Different clients evolved at different times; accepting both avoids silent $0 inserts when the
+ *   field name does not match exactly.
+ */
 app.post(
   "/api/cart-items",
   authenticateToken,
@@ -1794,6 +1926,7 @@ app.post(
       image_url,
       store,
       current_price,
+      price,
       is_in_stock,
       notes,
     } = req.body;
@@ -1803,23 +1936,36 @@ app.post(
     ? product_url.trim()
     : (req.headers.referer || "");
 
-    console.log("BODY FROM EXTENSION:", req.body);
-    console.log("PRODUCT URL:", productUrl);
+    if (String(process.env.DEBUG_CART_POST || "").trim() === "1") {
+      console.log("POST /api/cart-items body:", req.body, "product_url:", productUrl);
+    }
 
-    const priceRaw =
-      current_price === undefined || current_price === null
-        ? 0
-        : Number(current_price);
-    const priceNum = Number.isFinite(priceRaw) ? priceRaw : NaN;
+    // Accept `current_price` and legacy `price`; coerce strings ("199,00", "$130") like the price checker.
+    const fromCurrent = parsePositivePrice(current_price);
+    const fromLegacy = parsePositivePrice(price);
+    let priceNum =
+      fromCurrent != null && fromCurrent > 0
+        ? fromCurrent
+        : fromLegacy != null && fromLegacy > 0
+          ? fromLegacy
+          : NaN;
 
     if (!itemName) {
   return res.status(400).json({
     message: "Missing required field: item_name",
   });
 }
-    if (Number.isNaN(priceNum) || priceNum < 0) {
+    // If the extension sent 0 or omitted price, try one server-side fetch (same HTML parser as the background job).
+    if (!Number.isFinite(priceNum) || priceNum <= 0) {
+      const snapshot = await fetchProductSnapshotFromUrl(productUrl);
+      if (snapshot.price != null && snapshot.price > 0) {
+        priceNum = snapshot.price;
+      }
+    }
+    if (!Number.isFinite(priceNum) || priceNum <= 0) {
       return res.status(400).json({
-        message: "current_price must be a non-negative number",
+        message:
+          "Could not determine a valid price. Enter a positive price in the extension, or use a product URL the server can open.",
       });
     }
     if (is_in_stock !== undefined && typeof is_in_stock !== "boolean") {
@@ -1941,9 +2087,39 @@ app.patch(
         current_price,
         notes,
         is_purchased,
+        purchased,
         purchase_price,
+        is_in_stock,
+        out_of_stock,
       } = req.body;
       let normalizedPurchasePrice = purchase_price;
+
+      /**
+       * STUDENT NOTE — two names, one database column
+       * `is_purchased` is what Postgres stores. Some teammates POST `{ purchased: true }` instead.
+       * We merge so either spelling updates the same boolean column.
+       */
+      const mergedIsPurchased =
+        is_purchased !== undefined ? is_purchased : purchased;
+
+      /**
+       * STUDENT NOTE — stock flags
+       * DB column: `is_in_stock` (true = available).
+       * Some APIs prefer `out_of_stock` (true = NOT available) — we translate here.
+       * If BOTH are sent, `is_in_stock` wins because it is the direct column name.
+       */
+      let mergedInStock: boolean | undefined = undefined;
+      if (is_in_stock !== undefined) {
+        if (typeof is_in_stock !== "boolean") {
+          return res.status(400).json({ message: "is_in_stock must be a boolean when provided" });
+        }
+        mergedInStock = is_in_stock;
+      } else if (out_of_stock !== undefined) {
+        if (typeof out_of_stock !== "boolean") {
+          return res.status(400).json({ message: "out_of_stock must be a boolean when provided" });
+        }
+        mergedInStock = !out_of_stock;
+      }
 
       if (group_id !== undefined) {
         fieldsToUpdate.push(`group_id = $${valueIndex++}`);
@@ -1974,14 +2150,23 @@ app.patch(
         fieldsToUpdate.push(`current_price = $${valueIndex++}`);
         values.push(current_price);
       }
-      if (is_purchased !== undefined) {
+      if (mergedIsPurchased !== undefined) {
+        if (typeof mergedIsPurchased !== "boolean") {
+          return res.status(400).json({
+            message: "is_purchased / purchased must be a boolean when provided",
+          });
+        }
         fieldsToUpdate.push(`is_purchased = $${valueIndex++}`);
-        values.push(is_purchased);
-        if (is_purchased === true) {
+        values.push(mergedIsPurchased);
+        if (mergedIsPurchased === true) {
           fieldsToUpdate.push(`purchase_date = COALESCE(purchase_date, CURRENT_TIMESTAMP)`);
         } else {
           fieldsToUpdate.push(`purchase_date = NULL`);
         }
+      }
+      if (mergedInStock !== undefined) {
+        fieldsToUpdate.push(`is_in_stock = $${valueIndex++}`);
+        values.push(mergedInStock);
       }
       if (normalizedPurchasePrice !== undefined) {
         if (normalizedPurchasePrice !== null && Number(normalizedPurchasePrice) < 0) {
@@ -2031,7 +2216,7 @@ app.patch(
 
       // Keep spending analytics consistent: if an item is marked purchased but no
       // purchase price is provided, fall back to the current item price.
-      if (is_purchased === true && (normalizedPurchasePrice === undefined || normalizedPurchasePrice === null)) {
+      if (mergedIsPurchased === true && (normalizedPurchasePrice === undefined || normalizedPurchasePrice === null)) {
         normalizedPurchasePrice = previousPrice;
         if (!fieldsToUpdate.some((f) => f.startsWith("purchase_price = "))) {
           fieldsToUpdate.push(`purchase_price = $${valueIndex++}`);
@@ -2096,10 +2281,10 @@ app.patch(
         `SELECT body AS notes FROM item_private_notes WHERE item_id = $1 AND user_id = $2`,
         [item_id, owner_id]
       );
-      const mergedItem = {
+      const mergedItem = shapeCartItemResponse({
         ...updatedRow,
         notes: noteRow.rows[0]?.notes ?? null,
-      };
+      });
 
       return res.status(200).json({
         message: "Item updated successfully",
@@ -2388,6 +2573,11 @@ async function startServer() {
       console.log(`Server running on http://0.0.0.0:${PORT}`);
     });
 
+    if (PRICE_CHECK_DISABLED) {
+      console.log(
+        "Price checker: disabled (set PRICE_CHECK_ENABLED=true to enable, or set PRICE_CHECK_INTERVAL_MINUTES to a positive number)."
+      );
+    } else {
     const intervalMs = Math.max(5, PRICE_CHECK_INTERVAL_MINUTES) * 60 * 1000;
     console.log(`Price checker enabled: every ${Math.max(5, PRICE_CHECK_INTERVAL_MINUTES)} minute(s)`);
     setTimeout(() => {
@@ -2396,6 +2586,7 @@ async function startServer() {
     setInterval(() => {
       runPriceCheckCycle().catch(() => {});
     }, intervalMs);
+    }
 
   } catch (error) {
     console.error("Server startup failed:", error);
