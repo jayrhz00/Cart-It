@@ -192,7 +192,7 @@ const Dashboard = () => {
                 </div>
               </div>
               <div>
-                <div className="opacity-80">Active cart items</div>
+                <div className="opacity-80">Open items (not purchased)</div>
                 <div className="text-lg font-bold">
                   {analyticsSnapshot.openCount}
                 </div>
@@ -250,7 +250,7 @@ const Dashboard = () => {
                     </p>
                     <div className="mt-2 flex flex-col gap-1">
                       <select
-                        className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                        className="w-full min-w-0 rounded-md border border-slate-300 px-2 py-1 text-xs"
                         value={moveTargets[item.item_id] ?? ""}
                         onChange={(e) =>
                           setMoveTargets((prev) => ({

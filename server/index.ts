@@ -1380,12 +1380,35 @@ app.patch(
   async (req: AuthRequest<UpdateGroupBody>, res: Response) => {
     try {
       const group_id = Number(req.params.id);
-      const owner_id = req.user!.userId;
+      const user_id = req.user!.userId;
       const { group_name, color, visibility } = req.body;
 
       if (isNaN(group_id)) {
         return res.status(400).json({ message: "Invalid group ID" });
       }
+
+      const accessResult = await pool.query(
+        `
+        SELECT
+          g.owner_id,
+          CASE
+            WHEN g.owner_id = $2 THEN 'Owner'
+            ELSE (
+              SELECT gm.role
+              FROM group_members gm
+              WHERE gm.group_id = g.group_id AND gm.user_id = $2
+              LIMIT 1
+            )
+          END AS access_role
+        FROM groups g
+        WHERE g.group_id = $1
+        `,
+        [group_id, user_id]
+      );
+      if (accessResult.rows.length === 0 || !accessResult.rows[0].access_role) {
+        return res.status(404).json({ message: "Group not found for this user" });
+      }
+      const isOwner = Number(accessResult.rows[0].owner_id) === Number(user_id);
 
       const fieldsToUpdate: string[] = [];
       const values: Array<string | number | null> = [];
@@ -1397,11 +1420,17 @@ app.patch(
       }
 
       if (color !== undefined) {
+        if (!isOwner) {
+          return res.status(403).json({ message: "Only the owner can change color." });
+        }
         fieldsToUpdate.push(`color = $${valueIndex++}`);
         values.push(color);
       }
 
       if (visibility !== undefined) {
+        if (!isOwner) {
+          return res.status(403).json({ message: "Only the owner can change visibility." });
+        }
         fieldsToUpdate.push(`visibility = $${valueIndex++}`);
         values.push(visibility);
       }
@@ -1413,13 +1442,19 @@ app.patch(
       }
 
       values.push(group_id);
-      values.push(owner_id);
+      values.push(user_id);
 
       const result = await pool.query(
         `
         UPDATE groups
         SET ${fieldsToUpdate.join(", ")}
-        WHERE group_id = $${valueIndex++} AND owner_id = $${valueIndex}
+        WHERE group_id = $${valueIndex++} AND (
+          owner_id = $${valueIndex}
+          OR EXISTS (
+            SELECT 1 FROM group_members gm
+            WHERE gm.group_id = groups.group_id AND gm.user_id = $${valueIndex}
+          )
+        )
         RETURNING *
         `,
         values
@@ -1761,15 +1796,39 @@ app.get("/api/group-members", authenticateToken, async (req: AuthRequest, res: R
     const owner_id = req.user!.userId;
     const result = await pool.query(
       `
-      SELECT
-        gm.*,
-        u.username,
-        u.email
-      FROM group_members gm
-      JOIN groups g ON g.group_id = gm.group_id
-      JOIN users u ON u.user_id = gm.user_id
-      WHERE g.owner_id = $1 OR gm.user_id = $1
-      ORDER BY gm.group_id ASC, gm.user_id ASC
+      SELECT DISTINCT ON (visible_members.group_id, visible_members.user_id) *
+      FROM (
+        SELECT
+          g.group_id,
+          g.owner_id AS user_id,
+          'Owner'::text AS role,
+          g.created_at AS joined_at,
+          u.username,
+          u.email
+        FROM groups g
+        JOIN users u ON u.user_id = g.owner_id
+        WHERE g.owner_id = $1
+           OR EXISTS (
+             SELECT 1 FROM group_members gm
+             WHERE gm.group_id = g.group_id AND gm.user_id = $1
+           )
+        UNION ALL
+        SELECT
+          gm.group_id,
+          gm.user_id,
+          gm.role,
+          gm.joined_at,
+          u.username,
+          u.email
+        FROM group_members gm
+        JOIN groups g ON g.group_id = gm.group_id
+        JOIN users u ON u.user_id = gm.user_id
+        WHERE g.owner_id = $1 OR gm.user_id = $1
+      ) visible_members
+      ORDER BY
+        visible_members.group_id ASC,
+        visible_members.user_id ASC,
+        CASE WHEN visible_members.role = 'Owner' THEN 0 ELSE 1 END ASC
       `,
       [owner_id]
     );

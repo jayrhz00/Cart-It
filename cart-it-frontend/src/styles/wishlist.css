@@ -4,14 +4,14 @@
 
 @layer components {
   /* The Container: Forces sidebar and main side-by-side */
-  .page-wrapper { @apply flex h-screen overflow-hidden bg-white; }
+  .page-wrapper { @apply flex min-h-screen bg-white; }
 
   /* Sidebar styling (forcing width and border divider) */
   .sidebar-container-wrapper { @apply w-64 border-r border-gray-200 flex-shrink-0; }
 
   /* Main Area */
-  .detail-main { 
-    @apply flex-1 p-12 overflow-y-auto h-full bg-gray-50; 
+  .detail-main {
+    @apply flex-1 p-6 md:p-10 lg:p-12 overflow-y-auto min-w-0 bg-gray-50;
   }
 
   /* Header & Stats */
@@ -20,7 +20,7 @@
   .stats { @apply text-gray-500 text-sm mt-2 flex gap-2; }
 
   /* Toolbar */
-  .toolbar { @apply flex gap-3 mt-6 mb-10; }
+  .toolbar { @apply flex flex-wrap gap-3 mt-6 mb-10; }
   .tool-btn { 
     @apply flex items-center gap-2 px-5 py-2.5 rounded-lg bg-white border border-gray-300 
     text-gray-700 font-medium hover:bg-gray-100 transition-all shadow-sm; 
@@ -28,8 +28,8 @@
   .tool-btn.edit { @apply bg-[#DB8046] text-white border-transparent hover:bg-[#b86835]; }
 
   /* Item Grid */
-  .item-grid { @apply grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6; }
-  .item-card { @apply bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow; }
+  .item-grid { @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6; }
+  .item-card { @apply bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow min-w-0; }
   
   .img-wrapper { @apply relative h-64 bg-gray-100; }
   .img-wrapper img { @apply w-full h-full object-cover; }
@@ -37,6 +37,18 @@
 
   .item-details { @apply p-4; }
   .store { @apply text-xs uppercase tracking-wider text-gray-400 font-semibold; }
-  .name { @apply font-bold text-gray-900 mt-1; }
+  .name { @apply font-bold text-gray-900 mt-1 break-words; }
   .price { @apply font-bold text-gray-900 mt-2; }
+}
+
+@media (max-width: 1024px) {
+  .page-wrapper {
+    flex-direction: column;
+  }
+
+  .sidebar-container-wrapper {
+    width: 100%;
+    border-right: 0;
+    border-bottom: 1px solid #e5e7eb;
+  }
 }

@@ -29,3 +29,35 @@
   /* Logout Button */
   .logout-btn { @apply flex items-center gap-2 text-red-500 font-bold mt-auto text-base hover:text-red-700 transition-colors; }
 }
+
+@media (max-width: 1024px) {
+  .dash-sidebar {
+    width: 100%;
+    height: auto;
+    position: relative;
+    top: auto;
+    padding: 16px;
+  }
+
+  .sidebar-top {
+    flex: initial;
+  }
+
+  .sidebar-logo {
+    height: 64px;
+    margin-bottom: 16px;
+  }
+
+  .sidebar-wishlists {
+    margin-top: 12px;
+  }
+
+  .wishlists-scroll-area {
+    max-height: 120px;
+  }
+
+  .sidebar-bottom {
+    margin-top: 12px;
+    padding-top: 12px;
+  }
+}

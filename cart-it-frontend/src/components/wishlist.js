@@ -40,6 +40,9 @@ const Wishlist = () => {
   const [filter, setFilter] = useState("all");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteMsg, setInviteMsg] = useState("");
+  const [members, setMembers] = useState([]);
+  const [noteDrafts, setNoteDrafts] = useState({});
+  const [savingNoteId, setSavingNoteId] = useState(null);
 
   const groupId = Number(id);
 
@@ -52,14 +55,30 @@ const Wishlist = () => {
       navigate("/dashboard");
       return;
     }
-    const [groups, g, listItems] = await Promise.all([
+    const [groups, g, listItems, memberRows] = await Promise.all([
       apiRequest("/api/groups"),
       apiRequest(`/api/groups/${groupId}`),
       apiRequest(`/api/cart-items?group_id=${groupId}`),
+      apiRequest("/api/group-members").catch(() => []),
     ]);
     setWishlists(Array.isArray(groups) ? groups : []);
     setGroup(g);
-    setItems(Array.isArray(listItems) ? listItems : []);
+    const safeItems = Array.isArray(listItems) ? listItems : [];
+    setItems(safeItems);
+    setMembers(
+      Array.isArray(memberRows)
+        ? memberRows.filter((m) => Number(m.group_id) === Number(groupId))
+        : []
+    );
+    setNoteDrafts((prev) => {
+      const next = { ...prev };
+      safeItems.forEach((item) => {
+        if (next[item.item_id] === undefined) {
+          next[item.item_id] = item.notes || "";
+        }
+      });
+      return next;
+    });
   }, [navigate, groupId]);
 
   useEffect(() => {
@@ -106,6 +125,37 @@ const Wishlist = () => {
 
   const isOwner =
     String(group?.access_role || "").toLowerCase() === "owner";
+
+  const handleSaveNotes = async (item) => {
+    const itemId = item?.item_id;
+    if (!itemId) return;
+    setSavingNoteId(itemId);
+    try {
+      await apiRequest(`/api/cart-items/${itemId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          notes: String(noteDrafts[itemId] ?? "").trim() || null,
+        }),
+      });
+      await loadAll();
+    } catch (e) {
+      alert(e.message || "Could not save notes.");
+    } finally {
+      setSavingNoteId(null);
+    }
+  };
+
+  const handleTogglePurchased = async (item, checked) => {
+    try {
+      await apiRequest(`/api/cart-items/${item.item_id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ purchased: !!checked }),
+      });
+      await loadAll();
+    } catch (e) {
+      alert(e.message || "Could not update this item.");
+    }
+  };
 
   const handleRename = async () => {
     if (!isOwner) {
@@ -259,9 +309,31 @@ const Wishlist = () => {
               </div>
             ) : null}
             <button type="button" className="tool-btn edit" onClick={handleRename}>
-              <LuPen size={16} /> Edit name
+              <LuPen size={16} /> Rename list
             </button>
           </div>
+          {String(group?.visibility || "").toLowerCase() === "shared" ? (
+            <div className="mb-4 rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700">
+              <p className="font-semibold">Members</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
+                  {group?.owner_id === undefined ? "Owner" : "Owner listed below"}
+                </span>
+                {members.length > 0 ? (
+                  members.map((m) => (
+                    <span
+                      key={`${m.group_id}-${m.user_id}`}
+                      className="rounded-full bg-slate-100 px-2 py-1 text-xs"
+                    >
+                      {(m.username || m.email || `User #${m.user_id}`)} - {m.role || "Editor"}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs text-gray-500">No collaborators yet.</span>
+                )}
+              </div>
+            </div>
+          ) : null}
           {inviteMsg ? <p className="text-sm text-gray-600">{inviteMsg}</p> : null}
         </header>
 
@@ -306,6 +378,34 @@ const Wishlist = () => {
                       ? `Purchased ${formatMoney(item.purchase_price ?? item.current_price)}`
                       : formatMoney(item.current_price)}
                   </p>
+                  <label className="mt-2 flex items-center gap-2 text-xs text-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={!!item.is_purchased}
+                      onChange={(e) => handleTogglePurchased(item, e.target.checked)}
+                    />
+                    Purchased
+                  </label>
+                  <textarea
+                    rows={2}
+                    className="mt-2 w-full rounded border border-gray-300 px-2 py-1 text-xs"
+                    value={noteDrafts[item.item_id] ?? item.notes ?? ""}
+                    onChange={(e) =>
+                      setNoteDrafts((prev) => ({
+                        ...prev,
+                        [item.item_id]: e.target.value,
+                      }))
+                    }
+                    placeholder="Add notes (size, quality, reminders)"
+                  />
+                  <button
+                    type="button"
+                    className="mt-2 rounded-md border border-gray-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                    disabled={savingNoteId === item.item_id}
+                    onClick={() => handleSaveNotes(item)}
+                  >
+                    {savingNoteId === item.item_id ? "Saving..." : "Save notes"}
+                  </button>
                 </div>
               </div>
             ))

@@ -32,6 +32,8 @@ const Cart = () => {
   const [editMode, setEditMode] = useState(false);
   const [selected, setSelected] = useState({});
   const [moveGroupId, setMoveGroupId] = useState("");
+  const [noteDrafts, setNoteDrafts] = useState({});
+  const [savingNoteId, setSavingNoteId] = useState(null);
 
   const load = useCallback(async () => {
     if (!localStorage.getItem("token")) {
@@ -43,7 +45,17 @@ const Cart = () => {
       apiRequest("/api/cart-items"),
     ]);
     setWishlists(Array.isArray(groups) ? groups : []);
-    setItems(Array.isArray(cart) ? cart : []);
+    const safeItems = Array.isArray(cart) ? cart : [];
+    setItems(safeItems);
+    setNoteDrafts((prev) => {
+      const next = { ...prev };
+      safeItems.forEach((item) => {
+        if (next[item.item_id] === undefined) {
+          next[item.item_id] = item.notes || "";
+        }
+      });
+      return next;
+    });
   }, [navigate]);
 
   useEffect(() => {
@@ -144,6 +156,25 @@ const Cart = () => {
       await load();
     } catch (error) {
       alert(error.message || "Could not move selected items.");
+    }
+  };
+
+  const handleSaveNotes = async (item) => {
+    const itemId = item?.item_id;
+    if (!itemId) return;
+    setSavingNoteId(itemId);
+    try {
+      await apiRequest(`/api/cart-items/${itemId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          notes: String(noteDrafts[itemId] ?? "").trim() || null,
+        }),
+      });
+      await load();
+    } catch (error) {
+      alert(error.message || "Could not save notes.");
+    } finally {
+      setSavingNoteId(null);
     }
   };
 
@@ -301,6 +332,26 @@ const Cart = () => {
                       ? `Purchased ${formatMoney(item.purchase_price ?? item.current_price)}`
                       : formatMoney(item.current_price)}
                   </p>
+                  <textarea
+                    rows={2}
+                    className="mt-2 w-full rounded border border-gray-300 px-2 py-1 text-xs"
+                    value={noteDrafts[item.item_id] ?? item.notes ?? ""}
+                    onChange={(e) =>
+                      setNoteDrafts((prev) => ({
+                        ...prev,
+                        [item.item_id]: e.target.value,
+                      }))
+                    }
+                    placeholder="Add notes (size, quality, reminders)"
+                  />
+                  <button
+                    type="button"
+                    className="mt-2 rounded-md border border-gray-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                    disabled={savingNoteId === item.item_id}
+                    onClick={() => handleSaveNotes(item)}
+                  >
+                    {savingNoteId === item.item_id ? "Saving..." : "Save notes"}
+                  </button>
                 </div>
               </div>
             ))
