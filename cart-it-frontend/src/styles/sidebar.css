@@ -14,7 +14,11 @@
   
   /* Wishlist list */
   .sidebar-wishlists { @apply mt-6; }
-  .sidebar-wishlist-item { @apply py-2 px-3 text-sm hover:bg-orange-50 rounded-lg cursor-pointer text-gray-700; }
+  .sidebar-wishlist-item { @apply py-2 px-3 text-sm hover:bg-orange-50 rounded-lg cursor-pointer text-gray-700 flex items-center justify-between gap-2; }
+  .sidebar-wishlist-name { @apply truncate; }
+  .sidebar-wishlist-badge { @apply inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide; }
+  .sidebar-wishlist-badge-shared { @apply bg-blue-100 text-blue-700; }
+  .sidebar-wishlist-badge-private { @apply bg-slate-200 text-slate-700; }
   .wishlists-scroll-area { @apply max-h-40 overflow-y-auto pr-2; }
 
   /* Extension Card */
@@ -28,4 +32,36 @@
 
   /* Logout Button */
   .logout-btn { @apply flex items-center gap-2 text-red-500 font-bold mt-auto text-base hover:text-red-700 transition-colors; }
+}
+
+@media (max-width: 1024px) {
+  .dash-sidebar {
+    width: 100%;
+    height: auto;
+    position: relative;
+    top: auto;
+    padding: 16px;
+  }
+
+  .sidebar-top {
+    flex: initial;
+  }
+
+  .sidebar-logo {
+    height: 64px;
+    margin-bottom: 16px;
+  }
+
+  .sidebar-wishlists {
+    margin-top: 12px;
+  }
+
+  .wishlists-scroll-area {
+    max-height: 120px;
+  }
+
+  .sidebar-bottom {
+    margin-top: 12px;
+    padding-top: 12px;
+  }
 }

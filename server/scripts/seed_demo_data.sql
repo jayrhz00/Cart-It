@@ -1,13 +1,20 @@
--- Realistic demo seed for cart_it
--- Safe to run multiple times.
+-- Demo seed for cart_it
 -- Login password for all seeded users: demo123
+--
+-- STUDENT EXPLANATION:
+-- - This file inserts safe sample data so you can demo flows quickly.
+-- - It uses ON CONFLICT / NOT EXISTS, so rerunning it will not duplicate rows.
+-- - It creates two users, two groups, membership links, sample items, price history,
+--   and one example notification.
 
+-- 1) Demo users
 INSERT INTO users (username, email, password_hash)
 VALUES
   ('ayoje_h', 'ayoje@cartit.local', '$2b$10$l8a19bwljsAu1ThualCMo.VNPIgE4H9qoZF.X2.YNo4qXAw0PVCDu'),
   ('jessie_h', 'jessie@cartit.local', '$2b$10$l8a19bwljsAu1ThualCMo.VNPIgE4H9qoZF.X2.YNo4qXAw0PVCDu')
 ON CONFLICT (email) DO NOTHING;
 
+-- 2) Demo groups (one private, one shared)
 INSERT INTO groups (owner_id, group_name, color, visibility)
 SELECT u.user_id, 'Running Gear', '#2563eb', 'Private'
 FROM users u
@@ -20,6 +27,7 @@ FROM users u
 WHERE u.email = 'ayoje@cartit.local'
 ON CONFLICT (owner_id, group_name, visibility) DO NOTHING;
 
+-- 3) Group membership links (owner + collaborator)
 INSERT INTO group_members (group_id, user_id, role)
 SELECT g.group_id, owner.user_id, 'Owner'
 FROM groups g
@@ -36,7 +44,9 @@ WHERE owner.email = 'ayoje@cartit.local'
   AND g.group_name = 'Home Office'
 ON CONFLICT (group_id, user_id) DO NOTHING;
 
-INSERT INTO cart_items (
+-- 4) Sample cart items for demos
+INSERT INTO cart_items 
+(
   user_id, group_id, item_name, product_url, image_url, store, current_price, notes, is_purchased
 )
 SELECT
@@ -57,7 +67,8 @@ WHERE owner.email = 'ayoje@cartit.local'
     WHERE c.user_id = owner.user_id AND c.item_name = 'Nike Pegasus 41'
   );
 
-INSERT INTO cart_items (
+INSERT INTO cart_items 
+(
   user_id, group_id, item_name, product_url, image_url, store, current_price, notes, is_purchased
 )
 SELECT
@@ -78,6 +89,7 @@ WHERE owner.email = 'ayoje@cartit.local'
     WHERE c.user_id = owner.user_id AND c.item_name = 'IKEA Markus Chair'
   );
 
+-- 5) Initial price history rows for analytics/tracking demos
 INSERT INTO price_history (item_id, price)
 SELECT item.item_id, item.current_price
 FROM cart_items item
@@ -88,6 +100,7 @@ WHERE u.email = 'ayoje@cartit.local'
     SELECT 1 FROM price_history ph WHERE ph.item_id = item.item_id
   );
 
+-- 6) Example notification row
 INSERT INTO notifications (user_id, item_id, message, is_read)
 SELECT item.user_id, item.item_id, 'Price check complete for class demo.', FALSE
 FROM cart_items item

@@ -54,6 +54,12 @@
   .status-message { 
     @apply p-2.5 mb-4 bg-red-100 text-red-800 border border-red-200 rounded text-center text-sm; 
   }
+  .status-loading {
+    @apply p-2.5 mb-4 bg-sky-100 text-sky-900 border border-sky-200 rounded text-center text-sm;
+  }
+  .status-success {
+    @apply p-2.5 mb-4 bg-green-100 text-green-800 border border-green-200 rounded text-center text-sm;
+  }
 
   /* Typography */
   .auth-title {
@@ -77,6 +83,9 @@
   .btn-primary {
     @apply w-full bg-solar-orange text-white font-bold py-3 rounded-md shadow-md;
     @apply transition-transform hover:scale-105 active:scale-95;
+  }
+  .btn-primary:disabled {
+    @apply opacity-70 cursor-not-allowed;
   }
 
   .link-styled {

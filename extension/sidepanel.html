@@ -39,7 +39,7 @@
         display: flex;
         align-items: center;
         gap: 10px;
-        margin-bottom: 8px;
+        margin-bottom: 6px;
       }
       .popup-header img {
         width: 36px;
@@ -50,6 +50,18 @@
       .popup-header h3 {
         margin: 0;
         font-size: 1.15rem;
+      }
+      #authStatus {
+        font-size: 11px;
+        line-height: 1.4;
+        margin: 0 0 10px;
+      }
+      #tabHint {
+        font-size: 12px;
+        color: #64748b;
+        margin: 0 0 14px;
+        line-height: 1.35;
+        word-break: break-word;
       }
       label {
         display: block;
@@ -73,15 +85,6 @@
         min-height: 72px;
         resize: vertical;
       }
-      .row-btns {
-        display: flex;
-        gap: 8px;
-        margin-top: 14px;
-      }
-      .row-btns button {
-        flex: 1;
-        margin-top: 0;
-      }
       button {
         margin-top: 14px;
         width: 100%;
@@ -98,6 +101,17 @@
         background: #e2e8f0;
         color: #1e293b;
       }
+      button.link-btn {
+        margin-top: 8px;
+        width: auto;
+        padding: 0;
+        background: none;
+        color: #c2410c;
+        font-weight: 600;
+        font-size: 12px;
+        text-decoration: underline;
+        text-align: left;
+      }
       button:disabled {
         opacity: 0.6;
         cursor: not-allowed;
@@ -108,19 +122,41 @@
         line-height: 1.4;
         word-break: break-word;
       }
+      #viewWishlistLink {
+        display: inline-block;
+        margin-top: 8px;
+        font-size: 13px;
+        font-weight: 700;
+        color: #9a3412;
+        text-decoration: underline;
+      }
+      #viewWishlistLink[hidden] {
+        display: none !important;
+      }
       .ok {
         color: #166534;
       }
       .err {
         color: #991b1b;
       }
-      #authStatus {
-        font-size: 11px;
-        line-height: 1.4;
-        margin: 0 0 8px;
+      .new-cat-wrap {
+        margin-top: 10px;
+        padding: 10px;
+        border-radius: 10px;
+        background: #fff;
+        border: 1px solid #e2e8f0;
+      }
+      .new-cat-wrap[hidden] {
+        display: none !important;
+      }
+      .new-cat-wrap label:first-of-type {
+        margin-top: 0;
+      }
+      .new-cat-wrap button#createCatBtn {
+        margin-top: 10px;
       }
       details {
-        margin-top: 12px;
+        margin-top: 14px;
       }
       summary {
         font-size: 11px;
@@ -137,25 +173,53 @@
         <h3>cart-It</h3>
       </div>
       <p id="authStatus" class="hint"></p>
-      <div class="row-btns">
-        <button type="button" class="secondary" id="refreshBtn">Use current tab</button>
+
+      <div id="signInWrap">
+        <label for="signInEmail">Email</label>
+        <input id="signInEmail" type="email" autocomplete="username" />
+        <label for="signInPassword">Password</label>
+        <input id="signInPassword" type="password" autocomplete="current-password" />
+        <button type="button" id="signInBtn" class="secondary">Sign in</button>
+        <button type="button" id="createAccountBtn" class="link-btn">Create account (opens browser)</button>
       </div>
-      <label for="productUrl">Product page URL</label>
-      <input id="productUrl" type="text" placeholder="https://…" autocomplete="off" />
+
+      <p id="tabHint" aria-live="polite"></p>
+
+      <label for="listScope">Save to</label>
+      <select id="listScope">
+        <option value="Private">Private wishlist</option>
+        <option value="Shared">Shared wishlist</option>
+      </select>
+
       <label for="category">Category</label>
       <select id="category">
         <option value="">No category</option>
       </select>
+      <button type="button" id="toggleNewCat" class="link-btn">+ Create new category</button>
+      <div id="newCatWrap" class="new-cat-wrap" hidden>
+        <label for="newCatName">Name</label>
+        <input id="newCatName" type="text" placeholder="e.g. Holiday gifts" autocomplete="off" />
+        <button type="button" id="createCatBtn" class="secondary">Create category</button>
+      </div>
+
       <label for="notes">Notes (optional)</label>
       <textarea id="notes" placeholder="Sizing, color, reminders…"></textarea>
-      <button type="button" id="saveBtn">Save to wishlist</button>
+      <label for="manualPrice">Price (optional)</label>
+      <input id="manualPrice" type="number" min="0" step="0.01" placeholder="Auto-detected from page" />
+      <div id="priceHint" style="margin-top:6px;font-size:12px;line-height:1.35;"></div>
+      <button type="button" id="saveBtn">Save item</button>
       <div id="status"></div>
+      <a id="viewWishlistLink" href="#" target="_blank" rel="noreferrer" hidden>See item in wishlist</a>
+
       <details>
-        <summary>Advanced — API base URL</summary>
+        <summary>Advanced — API &amp; web app URL</summary>
+        <label for="webAppOrigin">Web app (for links)</label>
+        <input id="webAppOrigin" type="text" placeholder="https://cart-it.pages.dev" autocomplete="off" />
         <label for="apiBase">API (Express)</label>
-        <input id="apiBase" type="text" placeholder="http://127.0.0.1:5001" autocomplete="off" />
+        <input id="apiBase" type="text" placeholder="https://cart-it.onrender.com" autocomplete="off" />
       </details>
     </div>
+    <script src="config.js"></script>
     <script src="panel.js"></script>
   </body>
 </html>

@@ -83,6 +83,9 @@ const Signup = () => {
                 Sign Up
               </button>
             </form>
+            <p className="auth-subtitle" style={{ marginTop: "1rem" }}>
+              <Link to="/privacy" className="link-styled">Privacy Policy</Link>
+            </p>
           </div>
         </div>
       </div>

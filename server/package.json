@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "ts-node --project tsconfig.json --transpile-only index.ts"
+    "dev": "ts-node --project tsconfig.json --transpile-only index.ts",
+    "start": "ts-node --transpile-only index.ts"
   },
   "keywords": [],
   "author": "",
@@ -21,9 +22,11 @@
     "typescript": "^6.0.2"
   },
   "devDependencies": {
-    "@types/bcrypt": "^6.0.0",
-    "@types/cors": "^2.8.19",
-    "@types/jsonwebtoken": "^9.0.10",
-    "@types/pg": "^8.20.0"
-  }
+  "@types/bcrypt": "^6.0.0",
+  "@types/cors": "^2.8.19",
+  "@types/express": "^5.0.0",
+  "@types/jsonwebtoken": "^9.0.10",
+  "@types/node": "^22.0.0",
+  "@types/pg": "^8.20.0"
+}
 }

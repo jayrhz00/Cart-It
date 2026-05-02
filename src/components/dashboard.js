@@ -4,11 +4,12 @@
  * (2) User creates categories (groups) and items; data is stored in PostgreSQL via the API.
  * (3) Logout clears token so protected routes reject the next visit.
  */
-import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { LuCirclePlus, LuDownload, LuLogOut } from "react-icons/lu";
+import React, { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { LuCirclePlus, LuTrash2 } from "react-icons/lu";
 import "../styles/dashboard.css";
 import { apiRequest } from "./api";
+import DashShell from "./dash-shell";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -32,6 +33,11 @@ const Dashboard = () => {
     notes: "",
     group_id: "",
   });
+  /** Per-item category choice for “move to category” on uncategorized cards */
+  const [moveSelections, setMoveSelections] = useState({});
+  const [moveSavingId, setMoveSavingId] = useState(null);
+  const [itemDeletingId, setItemDeletingId] = useState(null);
+  const [groupDeletingId, setGroupDeletingId] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -61,15 +67,48 @@ const Dashboard = () => {
     load();
   }, [navigate]);
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    navigate("/login");
-  };
-
   const reloadItems = async () => {
     const items = await apiRequest("/api/cart-items");
     setCartItems(items);
+  };
+
+  const reloadGroups = async () => {
+    const groupData = await apiRequest("/api/groups");
+    setGroups(groupData);
+  };
+
+  const handleDeleteItem = async (itemId, itemName) => {
+    const label = (itemName || "this item").slice(0, 80);
+    if (!window.confirm(`Remove “${label}” from your cart?`)) return;
+    setItemDeletingId(itemId);
+    try {
+      await apiRequest(`/api/cart-items/${itemId}`, { method: "DELETE" });
+      setStatusMessage("Item removed.");
+      await reloadItems();
+    } catch (error) {
+      setStatusMessage(error.message || "Could not delete item.");
+    } finally {
+      setItemDeletingId(null);
+    }
+  };
+
+  const handleDeleteGroup = async (group) => {
+    const n = cartItems.filter((i) => i.group_id == group.group_id).length;
+    const msg =
+      n > 0
+        ? `Delete category “${group.group_name}”? ${n} item(s) will become uncategorized (not deleted).`
+        : `Delete category “${group.group_name}”?`;
+    if (!window.confirm(msg)) return;
+    setGroupDeletingId(group.group_id);
+    try {
+      await apiRequest(`/api/groups/${group.group_id}`, { method: "DELETE" });
+      setStatusMessage("Category deleted.");
+      await Promise.all([reloadGroups(), reloadItems()]);
+    } catch (error) {
+      setStatusMessage(error.message || "Could not delete category.");
+    } finally {
+      setGroupDeletingId(null);
+    }
   };
 
   const handleAddItem = async () => {
@@ -127,6 +166,52 @@ const Dashboard = () => {
     }
   };
 
+  const sortedCartItems = useMemo(() => {
+    return [...cartItems].sort((a, b) => {
+      const aUncat = a.group_id == null ? 0 : 1;
+      const bUncat = b.group_id == null ? 0 : 1;
+      if (aUncat !== bUncat) return aUncat - bUncat;
+      return (b.item_id || 0) - (a.item_id || 0);
+    });
+  }, [cartItems]);
+
+  const groupNameForItem = (item) => {
+    if (item.group_id == null) return null;
+    const g = groups.find((x) => x.group_id == item.group_id);
+    return g?.group_name || "Category";
+  };
+
+  const handleAssignCategory = async (itemId) => {
+    const gidRaw = moveSelections[itemId];
+    if (gidRaw == null || gidRaw === "") {
+      setStatusMessage("Pick a category for this item first.");
+      return;
+    }
+    const parsed = parseInt(String(gidRaw), 10);
+    if (Number.isNaN(parsed)) {
+      setStatusMessage("Invalid category.");
+      return;
+    }
+    setMoveSavingId(itemId);
+    try {
+      await apiRequest(`/api/cart-items/${itemId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ group_id: parsed }),
+      });
+      setStatusMessage("Item moved to category.");
+      setMoveSelections((s) => {
+        const next = { ...s };
+        delete next[itemId];
+        return next;
+      });
+      await reloadItems();
+    } catch (error) {
+      setStatusMessage(error.message || "Could not update category.");
+    } finally {
+      setMoveSavingId(null);
+    }
+  };
+
   const handleSaveGroup = async () => {
     if (!newGroupName.trim()) return;
     try {
@@ -153,21 +238,7 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="dashboard-container">
-      <aside className="dash-sidebar">
-        <img src="/logo.png" alt="Cart-It Logo" className="sidebar-logo" />
-        <div className="extension-card">
-          <p className="extension-title">Get the Extension</p>
-          <button className="extension-btn">
-            <LuDownload size={14} /> Download
-          </button>
-        </div>
-        <button className="logout-btn" onClick={handleLogout}>
-          <LuLogOut /> Log Out
-        </button>
-      </aside>
-
-      <main className="dash-main">
+    <DashShell>
         <h1 className="dash-title">Hello, {user?.username || "User"}</h1>
         {statusMessage && <p className="status-message">{statusMessage}</p>}
 
@@ -180,21 +251,66 @@ const Dashboard = () => {
             </button>
 
             {groups.length > 0 ? (
-              groups.map((group) => (
-                <div key={group.group_id} className="wishlist-card">
+              groups.map((group) => {
+                const inGroup = cartItems.filter((item) => item.group_id == group.group_id);
+                const withImg = inGroup.filter((i) => i.image_url);
+                const noImg = inGroup.filter((i) => !i.image_url);
+                const preview = [...withImg, ...noImg].slice(0, 4);
+                const tint = group.color || "#fdba74";
+                const isEmpty = inGroup.length === 0;
+                return (
                   <div
-                    className="wishlist-card-swatch"
-                    style={{ backgroundColor: group.color || "#94a3b8" }}
+                    key={group.group_id}
+                    className="wishlist-card wishlist-card-tile"
+                    style={{ "--cat-accent": tint }}
                   >
-                    <span className="wishlist-card-name">{group.group_name}</span>
+                    <Link to={`/wishlist/${group.group_id}`} className="wishlist-card-tile-link">
+                      {isEmpty ? (
+                        <div className="wishlist-card-empty-hero">
+                          <span className="wishlist-empty-icon" aria-hidden="true">
+                            ✦
+                          </span>
+                          <span className="wishlist-empty-hint">Drop saves here from the extension</span>
+                        </div>
+                      ) : (
+                        <div className="wishlist-card-mosaic">
+                          {Array.from({ length: 4 }).map((_, slot) => {
+                            const item = preview[slot];
+                            return (
+                              <div key={slot} className="wishlist-mosaic-cell">
+                                {item?.image_url ? (
+                                  <img src={item.image_url} alt="" className="wishlist-mosaic-img" />
+                                ) : (
+                                  <div className="wishlist-mosaic-placeholder" />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <div className="wishlist-card-info">
+                        <span className="wishlist-card-title">{group.group_name}</span>
+                        <span className="wishlist-card-meta">
+                          {inGroup.length} {inGroup.length === 1 ? "item" : "items"}
+                        </span>
+                      </div>
+                    </Link>
+                    <button
+                      type="button"
+                      className="wishlist-delete-fab"
+                      disabled={groupDeletingId == group.group_id}
+                      aria-label={`Delete category ${group.group_name}`}
+                      title="Delete category"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleDeleteGroup(group);
+                      }}
+                    >
+                      <LuTrash2 size={15} aria-hidden />
+                    </button>
                   </div>
-                  <div className="wishlist-card-footer">
-                    <span className="wishlist-item-count">
-                      {cartItems.filter((item) => item.group_id === group.group_id).length} items
-                    </span>
-                  </div>
-                </div>
-              ))
+                );
+              })
             ) : (
               <div className="empty-state">No categories yet.</div>
             )}
@@ -203,7 +319,7 @@ const Dashboard = () => {
 
         <section className="dashboard-card">
           <div className="card-header-row">
-            <h2 className="card-header">Recent Cart Items</h2>
+            <h2 className="card-header">Recent cart items</h2>
             <button
               type="button"
               className="add-item-btn"
@@ -224,17 +340,85 @@ const Dashboard = () => {
               + Add item
             </button>
           </div>
+          <p className="cart-section-hint">
+            Items saved from the extension without a category appear here first — use{" "}
+            <strong>Move to category</strong> when you are ready to organize them.
+          </p>
           <div className="cart-grid">
-            {cartItems.length > 0 ? (
-              cartItems.slice(0, 8).map((item) => (
-                <div key={item.item_id} className="cart-placeholder">
-                  {item.image_url ? (
-                    <img src={item.image_url} alt={item.item_name} className="item-image" />
-                  ) : (
-                    item.item_name
-                  )}
-                </div>
-              ))
+            {sortedCartItems.length > 0 ? (
+              sortedCartItems.slice(0, 12).map((item) => {
+                const uncategorized = item.group_id == null;
+                return (
+                  <div key={item.item_id} className="cart-item-card">
+                    <button
+                      type="button"
+                      className="cart-delete-btn"
+                      disabled={itemDeletingId == item.item_id}
+                      aria-label={`Delete ${item.item_name}`}
+                      title="Remove from cart"
+                      onClick={() => handleDeleteItem(item.item_id, item.item_name)}
+                    >
+                      <LuTrash2 size={15} aria-hidden />
+                    </button>
+                    <a
+                      href={item.product_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="cart-item-media"
+                      title={item.item_name}
+                    >
+                      {item.image_url ? (
+                        <img src={item.image_url} alt="" className="item-image" />
+                      ) : (
+                        <span className="cart-item-title-fallback">{item.item_name}</span>
+                      )}
+                    </a>
+                    <div className="cart-item-meta">
+                      <span className="cart-item-name" title={item.item_name}>
+                        {item.item_name}
+                      </span>
+                      {uncategorized ? (
+                        <span className="cart-item-badge">No category</span>
+                      ) : (
+                        <span className="cart-item-category">{groupNameForItem(item)}</span>
+                      )}
+                    </div>
+                    {uncategorized && groups.length > 0 && (
+                      <div className="cart-item-move">
+                        <select
+                          className="cart-move-select"
+                          value={moveSelections[item.item_id] ?? ""}
+                          onChange={(e) =>
+                            setMoveSelections((s) => ({
+                              ...s,
+                              [item.item_id]: e.target.value,
+                            }))
+                          }
+                          aria-label={`Category for ${item.item_name}`}
+                        >
+                          <option value="">Move to…</option>
+                          {groups.map((g) => (
+                            <option key={g.group_id} value={String(g.group_id)}>
+                              {g.group_name}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          className="cart-move-btn"
+                          disabled={moveSavingId === item.item_id}
+                          onClick={() => handleAssignCategory(item.item_id)}
+                        >
+                          {moveSavingId === item.item_id ? "…" : "Apply"}
+                        </button>
+                      </div>
+                    )}
+                    {uncategorized && groups.length === 0 && (
+                      <p className="cart-item-move-hint">Create a category above, then assign this item.</p>
+                    )}
+                  </div>
+                );
+              })
             ) : (
               <div className="empty-state">No items yet.</div>
             )}
@@ -337,7 +521,22 @@ const Dashboard = () => {
                 value={newGroupName}
                 onChange={(e) => setNewGroupName(e.target.value)}
               />
-              <input type="color" value={newGroupColor} onChange={(e) => setNewGroupColor(e.target.value)} />
+              <label className="modal-label" htmlFor="newGroupColorInput">
+                Category color
+              </label>
+              <p className="modal-hint">Tap the swatch — pick a warm color that matches your list.</p>
+              <div className="modal-color-wrap">
+                <div className="modal-color-inner">
+                  <input
+                    id="newGroupColorInput"
+                    type="color"
+                    value={newGroupColor}
+                    onChange={(e) => setNewGroupColor(e.target.value)}
+                    title="Choose category color"
+                    aria-label="Choose category color"
+                  />
+                </div>
+              </div>
               <div className="modal-actions">
                 <button onClick={() => setIsModalOpen(false)} className="cancel-btn">
                   Cancel
@@ -349,8 +548,7 @@ const Dashboard = () => {
             </div>
           </div>
         )}
-      </main>
-    </div>
+    </DashShell>
   );
 };
 

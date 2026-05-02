@@ -9,9 +9,12 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setStatusMessage("");
+    setIsLoading(true);
     try {
       const data = await apiRequest("/api/login", {
         method: "POST",
@@ -23,6 +26,8 @@ const Login = () => {
       navigate("/dashboard");
     } catch (error) {
       setStatusMessage(error.message || "Could not connect to server");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -42,8 +47,12 @@ const Login = () => {
           <div className="auth-card">
             <h2 className="auth-title">Log in to your account</h2>
             {statusMessage && <div className="status-message">{statusMessage}</div>}
+            {isLoading && <div className="status-loading">Signing you in...</div>}
             <p className="auth-subtitle">
               Don&apos;t have an account? <Link to="/signup" className="link-styled">Sign up here.</Link>
+            </p>
+            <p className="auth-subtitle">
+              Forgot password? <Link to="/forgot-password" className="link-styled">Reset it here.</Link>
             </p>
 
             <form onSubmit={handleSubmit} className="auth-form-group">
@@ -54,6 +63,7 @@ const Login = () => {
                   className="input-field"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  disabled={isLoading}
                   required
                 />
               </div>
@@ -65,14 +75,18 @@ const Login = () => {
                   className="input-field"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  disabled={isLoading}
                   required
                 />
               </div>
 
-              <button type="submit" className="btn-primary">
-                Log In
+              <button type="submit" className="btn-primary" disabled={isLoading}>
+                {isLoading ? "Logging in..." : "Log In"}
               </button>
             </form>
+            <p className="auth-subtitle" style={{ marginTop: "1rem" }}>
+              <Link to="/privacy" className="link-styled">Privacy Policy</Link>
+            </p>
           </div>
         </div>
       </div>

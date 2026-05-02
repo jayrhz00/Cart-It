@@ -1,35 +1,33 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import '../styles/auth.css';
+import { apiRequest } from './api';
 
 const Login = () => {
   const navigate = useNavigate(); // Hook for navigation
   const [email, setEmail] = useState(''); // State for email input
   const [password, setPassword] = useState(''); // State for password input
   const [statusMessage, setStatusMessage] = useState(''); // State for status messages
+  const [isLoading, setIsLoading] = useState(false);
 
   // Handle form submission for login
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setStatusMessage('');
+    setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:3000/api/login', {
+      const data = await apiRequest('/api/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-      
-      // If login is successful, store token and user info, then navigate to dashboard
-      if (response.ok) {
-        const data = await response.json(); 
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        navigate('/dashboard');
-      } else {
-        setStatusMessage("Login Failed: Incorrect email or password");
-      }
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      navigate('/dashboard');
     } catch (error) {
       console.error("Connection error:", error);
-      setStatusMessage("Could not connect to server");
+      setStatusMessage(error.message || "Could not connect to server");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -52,8 +50,12 @@ const Login = () => {
             <h2 className="auth-title">Log in to your account</h2>
               {/* Display status messages */}
             {statusMessage && <div className="status-message">{statusMessage}</div>}
+            {isLoading && <div className="status-loading">Signing you in...</div>}
             <p className="auth-subtitle">
               Don’t have an account? <Link to="/signup" className="link-styled">Sign up here.</Link>
+            </p>
+            <p className="auth-subtitle">
+              Forgot password? <Link to="/forgot-password" className="link-styled">Reset it here.</Link>
             </p>
 
             {/* Authentication form */}
@@ -65,6 +67,7 @@ const Login = () => {
                   className="input-field"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  disabled={isLoading}
                   required 
                 />
               </div>
@@ -76,12 +79,13 @@ const Login = () => {
                   className="input-field"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  disabled={isLoading}
                   required 
                 />
               </div>
 
-              <button type="submit" className="btn-primary">
-                Log In
+              <button type="submit" className="btn-primary" disabled={isLoading}>
+                {isLoading ? "Logging in..." : "Log In"}
               </button>
             </form>
           </div>

@@ -5,20 +5,38 @@
  */
 (function cartItTokenBridge() {
   const STORAGE_KEY = "token";
+  let timerId = null;
 
   function pushToken() {
+    if (!chrome?.runtime?.id) return;
     let token = null;
     try {
       token = localStorage.getItem(STORAGE_KEY);
     } catch (_) {
       token = null;
     }
-    chrome.runtime.sendMessage({ type: "CARTIT_TOKEN", token });
+    if (typeof token === "string" && token.startsWith("Bearer ")) {
+      token = token.slice(7).trim();
+    }
+    try {
+      chrome.runtime.sendMessage({ type: "CARTIT_TOKEN", token }, () => {
+        // When an extension is reloaded/updated, the old page context can outlive it briefly.
+        // Ignore errors like: "Extension context invalidated."
+        void chrome.runtime.lastError;
+      });
+    } catch (_) {
+      /* ignore */
+    }
   }
 
   pushToken();
-  setInterval(pushToken, 2500);
+  timerId = setInterval(pushToken, 2500);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") pushToken();
+  });
+
+  window.addEventListener("beforeunload", () => {
+    if (timerId) clearInterval(timerId);
+    timerId = null;
   });
 })();
