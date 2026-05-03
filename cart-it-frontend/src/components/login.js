@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import '../styles/auth.css';
 import { apiRequest } from './api';
@@ -9,12 +9,19 @@ const Login = () => {
   const [password, setPassword] = useState(''); // State for password input
   const [statusMessage, setStatusMessage] = useState(''); // State for status messages
   const [isLoading, setIsLoading] = useState(false);
+  const slowHintTimerRef = useRef(null);
 
   // Handle form submission for login
   const handleSubmit = async (e) => {
     e.preventDefault();
     setStatusMessage('');
     setIsLoading(true);
+    if (slowHintTimerRef.current) clearTimeout(slowHintTimerRef.current);
+    slowHintTimerRef.current = setTimeout(() => {
+      setStatusMessage(
+        'Still connecting… If the app has been idle, the API may be waking from sleep (often 30–90s on free hosting).'
+      );
+    }, 5000);
     try {
       const data = await apiRequest('/api/login', {
         method: 'POST',
@@ -27,6 +34,10 @@ const Login = () => {
       console.error("Connection error:", error);
       setStatusMessage(error.message || "Could not connect to server");
     } finally {
+      if (slowHintTimerRef.current) {
+        clearTimeout(slowHintTimerRef.current);
+        slowHintTimerRef.current = null;
+      }
       setIsLoading(false);
     }
   };

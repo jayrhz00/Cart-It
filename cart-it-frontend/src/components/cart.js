@@ -10,6 +10,12 @@ const formatMoney = (n) => {
   return Number.isFinite(v) ? `$${v.toFixed(2)}` : "$0.00";
 };
 
+const purchasedPriceLabel = (item) => {
+  const n = Number(item.purchase_price ?? item.current_price);
+  if (Number.isFinite(n) && n > 0) return `Purchased ${formatMoney(n)}`;
+  return "Purchased (no price on file)";
+};
+
 const formatRelativeTime = (iso) => {
   if (!iso) return "recently";
   const t = new Date(iso).getTime();
@@ -62,6 +68,10 @@ const Cart = () => {
     load().catch((e) => console.error(e));
   }, [load]);
 
+  useEffect(() => {
+    if (filter === "inStock" || filter === "outOfStock") setFilter("all");
+  }, [filter]);
+
   const sidebarLists = useMemo(
     () =>
       wishlists.map((w) => ({
@@ -76,8 +86,6 @@ const Cart = () => {
     let list = [...items];
     if (filter === "open") list = list.filter((i) => !i.is_purchased);
     if (filter === "purchased") list = list.filter((i) => i.is_purchased);
-    if (filter === "inStock") list = list.filter((i) => i.is_in_stock !== false);
-    if (filter === "outOfStock") list = list.filter((i) => i.is_in_stock === false);
     return list;
   }, [items, filter]);
 
@@ -208,35 +216,18 @@ const Cart = () => {
           </div>
 
           <div className="toolbar">
-            <div className="relative">
-              <button
-                type="button"
-                className="tool-btn"
-                onClick={() => {
-                  const next =
-                    filter === "all"
-                      ? "open"
-                      : filter === "open"
-                        ? "purchased"
-                        : filter === "purchased"
-                          ? "inStock"
-                          : filter === "inStock"
-                            ? "outOfStock"
-                        : "all";
-                  setFilter(next);
-                }}
+            <div className="toolbar-filter-wrap">
+              <LuFilter size={16} className="shrink-0 text-gray-500" aria-hidden />
+              <select
+                className="toolbar-filter-select"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                aria-label="Filter cart items"
               >
-                <LuFilter size={16} />{" "}
-                {filter === "all"
-                  ? "Filter: All"
-                  : filter === "open"
-                    ? "Filter: Not purchased"
-                    : filter === "purchased"
-                      ? "Filter: Purchased"
-                  : filter === "inStock"
-                    ? "Filter: In stock"
-                    : "Filter: Out of stock"}
-              </button>
+                <option value="all">All items</option>
+                <option value="open">Not purchased</option>
+                <option value="purchased">Purchased</option>
+              </select>
             </div>
             <button type="button" className="tool-btn" onClick={handleShare}>
               <LuShare2 size={16} /> Share
@@ -330,7 +321,7 @@ const Cart = () => {
                   <h3 className="name">{item.item_name}</h3>
                   <p className="price">
                     {item.is_purchased
-                      ? `Purchased ${formatMoney(item.purchase_price ?? item.current_price)}`
+                      ? purchasedPriceLabel(item)
                       : formatMoney(item.current_price)}
                   </p>
                   <textarea

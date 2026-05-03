@@ -6,6 +6,7 @@ import {
   LuShare2,
   LuPen,
   LuUsers,
+  LuTrash2,
 } from "react-icons/lu";
 import Sidebar from './sidebar';
 import '../styles/wishlist.css';
@@ -14,6 +15,13 @@ import { apiRequest } from './api';
 const formatMoney = (n) => {
   const v = Number(n);
   return Number.isFinite(v) ? `$${v.toFixed(2)}` : "$0.00";
+};
+
+/** Checkbox "Purchased" copies list price into purchase_price; if list price was missing/$0, both stay zero. */
+const purchasedPriceLabel = (item) => {
+  const n = Number(item.purchase_price ?? item.current_price);
+  if (Number.isFinite(n) && n > 0) return `Purchased ${formatMoney(n)}`;
+  return "Purchased (no price on file)";
 };
 
 const formatRelativeTime = (iso) => {
@@ -43,6 +51,7 @@ const Wishlist = () => {
   const [members, setMembers] = useState([]);
   const [noteDrafts, setNoteDrafts] = useState({});
   const [savingNoteId, setSavingNoteId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   const groupId = Number(id);
 
@@ -85,6 +94,10 @@ const Wishlist = () => {
     loadAll().catch((e) => console.error(e));
   }, [loadAll]);
 
+  useEffect(() => {
+    if (filter === "inStock") setFilter("all");
+  }, [filter]);
+
   const sidebarLists = useMemo(
     () =>
       wishlists.map((w) => ({
@@ -101,7 +114,6 @@ const Wishlist = () => {
     let list = [...items];
     if (filter === "open") list = list.filter((i) => !i.is_purchased);
     if (filter === "purchased") list = list.filter((i) => i.is_purchased);
-    if (filter === "inStock") list = list.filter((i) => i.is_in_stock !== false);
     return list;
   }, [items, filter]);
 
@@ -155,6 +167,22 @@ const Wishlist = () => {
       await loadAll();
     } catch (e) {
       alert(e.message || "Could not update this item.");
+    }
+  };
+
+  const handleRemoveItem = async (item) => {
+    const itemId = item?.item_id;
+    if (!itemId) return;
+    const label = (item.item_name || "this item").slice(0, 80);
+    if (!window.confirm(`Remove “${label}” from this wishlist?`)) return;
+    setDeletingId(itemId);
+    try {
+      await apiRequest(`/api/cart-items/${itemId}`, { method: "DELETE" });
+      await loadAll();
+    } catch (e) {
+      alert(e.message || "Could not remove this item.");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -235,27 +263,19 @@ const Wishlist = () => {
           </div>
 
           <div className="toolbar">
-            <button
-              type="button"
-              className="tool-btn"
-              onClick={() => {
-                const next =
-                  filter === "all"
-                    ? "open"
-                    : filter === "open"
-                      ? "purchased"
-                      : filter === "purchased"
-                        ? "inStock"
-                        : "all";
-                setFilter(next);
-              }}
-            >
-              <LuFilter size={16} />{" "}
-              {filter === "all" && "All items"}
-              {filter === "open" && "Not purchased"}
-              {filter === "purchased" && "Purchased"}
-              {filter === "inStock" && "In stock only"}
-            </button>
+            <div className="toolbar-filter-wrap">
+              <LuFilter size={16} className="shrink-0 text-gray-500" aria-hidden />
+              <select
+                className="toolbar-filter-select"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                aria-label="Filter wishlist items"
+              >
+                <option value="all">All items</option>
+                <option value="open">Not purchased</option>
+                <option value="purchased">Purchased</option>
+              </select>
+            </div>
             <button type="button" className="tool-btn" onClick={handleShare}>
               <LuShare2 size={16} /> Share
             </button>
@@ -366,13 +386,28 @@ const Wishlist = () => {
                       e.currentTarget.src = "/logo.png";
                     }}
                   />
+                  <button
+                    type="button"
+                    className="wishlist-item-remove"
+                    disabled={deletingId === item.item_id}
+                    title="Remove from wishlist"
+                    aria-label={`Remove ${item.item_name || "item"} from wishlist`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      handleRemoveItem(item);
+                    }}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    <LuTrash2 size={18} aria-hidden />
+                  </button>
                 </div>
                 <div className="item-details">
                   <p className="store">{item.store || "—"}</p>
                   <h3 className="name">{item.item_name}</h3>
                   <p className="price">
                     {item.is_purchased
-                      ? `Purchased ${formatMoney(item.purchase_price ?? item.current_price)}`
+                      ? purchasedPriceLabel(item)
                       : formatMoney(item.current_price)}
                   </p>
                   <label className="mt-2 flex items-center gap-2 text-xs text-gray-600">

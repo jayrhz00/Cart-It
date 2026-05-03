@@ -259,6 +259,26 @@ function getFrontendBaseUrl(): string {
   return raw.replace(/\/+$/, "");
 }
 
+async function insertUserNotification(params: {
+  userId: number;
+  message: string;
+  itemId?: number | null;
+  groupId?: number | null;
+}): Promise<void> {
+  const { userId, message, itemId = null, groupId = null } = params;
+  try {
+    await pool.query(
+      `
+      INSERT INTO notifications (user_id, item_id, group_id, message, is_read)
+      VALUES ($1, $2, $3, $4, false)
+      `,
+      [userId, itemId, groupId, message]
+    );
+  } catch (error) {
+    console.error("insertUserNotification failed:", error);
+  }
+}
+
 async function userCanAccessGroup(userId: number, groupId: number): Promise<boolean> {
   const r = await pool.query(
     `
@@ -651,38 +671,122 @@ function extractPriceFromHtml(html: string): number | null {
   return null;
 }
 
-function extractStockFromHtml(html: string): boolean | null {
-  const availabilityUrlMatch = html.match(
-    /"availability"\s*:\s*"(?:https?:\/\/schema\.org\/)?(InStock|OutOfStock|PreOrder|BackOrder|LimitedAvailability)"/i
-  );
-  if (availabilityUrlMatch?.[1]) {
-    const token = availabilityUrlMatch[1].toLowerCase();
-    if (token === "outofstock") return false;
-    return true;
+/**
+ * Normalize schema.org availability URLs or short names to a lowercase token
+ * (e.g. https://schema.org/InStock -> "instock").
+ */
+function normalizeSchemaAvailabilityValue(raw: string): string | null {
+  const s = String(raw).trim();
+  const m = s.match(/(?:https?:\/\/schema\.org\/)?([A-Za-z]+)\s*$/i);
+  if (!m) return null;
+  return m[1].toLowerCase();
+}
+
+function collectAvailabilityTokensFromJsonLdValue(node: unknown, acc: Set<string>): void {
+  if (node == null) return;
+  if (typeof node === "string") {
+    const t = normalizeSchemaAvailabilityValue(node);
+    if (t) acc.add(t);
+    return;
   }
+  if (Array.isArray(node)) {
+    for (const el of node) collectAvailabilityTokensFromJsonLdValue(el, acc);
+    return;
+  }
+  if (typeof node !== "object") return;
+  const obj = node as Record<string, unknown>;
+  if (typeof obj.availability === "string") {
+    const t = normalizeSchemaAvailabilityValue(obj.availability);
+    if (t) acc.add(t);
+  }
+  for (const v of Object.values(obj)) {
+    if (v && (typeof v === "object" || typeof v === "string")) {
+      collectAvailabilityTokensFromJsonLdValue(v, acc);
+    }
+  }
+}
+
+/**
+ * Reads every JSON-LD block so multi-variant PDPs (some sizes OOS, some in stock)
+ * only resolve to "out of stock" when no offer is still purchasable.
+ */
+function extractStockFromJsonLd(html: string): boolean | null {
+  const jsonLdBlocks =
+    html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
+  const tokens = new Set<string>();
+  for (const block of jsonLdBlocks) {
+    const content = block
+      .replace(/^<script[^>]*>/i, "")
+      .replace(/<\/script>$/i, "")
+      .trim();
+    if (!content) continue;
+    try {
+      const parsed = JSON.parse(content);
+      collectAvailabilityTokensFromJsonLdValue(parsed, tokens);
+    } catch {
+      // Ignore malformed JSON-LD
+    }
+  }
+  if (tokens.size === 0) return null;
+
+  const positive = new Set([
+    "instock",
+    "limitedavailability",
+    "preorder",
+    "backorder",
+    "instoreonly",
+  ]);
+  const negative = new Set(["outofstock", "discontinued"]);
+
+  let hasPositive = false;
+  let hasNegative = false;
+  for (const t of tokens) {
+    if (positive.has(t)) hasPositive = true;
+    if (negative.has(t)) hasNegative = true;
+  }
+  if (hasPositive) return true;
+  if (hasNegative) return false;
+  return null;
+}
+
+function extractStockFromHtml(html: string): boolean | null {
+  const fromLd = extractStockFromJsonLd(html);
+  if (fromLd !== null) return fromLd;
 
   const outOfStockPatterns = [
     /\bout of stock\b/i,
     /\bsold out\b/i,
-    /\bunavailable\b/i,
     /\bcurrently unavailable\b/i,
     /\btemporarily unavailable\b/i,
     /\bnotify me when available\b/i,
   ];
-  for (const re of outOfStockPatterns) {
-    if (re.test(html)) return false;
-  }
-
   const inStockPatterns = [
     /\bin stock\b/i,
     /\bavailable now\b/i,
     /\badd to cart\b/i,
+    /\badd to bag\b/i,
     /\bbuy now\b/i,
   ];
+
+  let hasNegative = false;
+  for (const re of outOfStockPatterns) {
+    if (re.test(html)) {
+      hasNegative = true;
+      break;
+    }
+  }
+  let hasPositive = false;
   for (const re of inStockPatterns) {
-    if (re.test(html)) return true;
+    if (re.test(html)) {
+      hasPositive = true;
+      break;
+    }
   }
 
+  // Many apparel sites show "out of stock" for one size and "Add to bag" for others — treat as unknown.
+  if (hasPositive && hasNegative) return null;
+  if (hasPositive) return true;
+  if (hasNegative) return false;
   return null;
 }
 
@@ -718,7 +822,7 @@ async function runPriceCheckCycle(): Promise<void> {
   try {
     const items = await pool.query(
       `
-      SELECT ci.item_id, ci.user_id, ci.item_name, ci.product_url, ci.current_price, ci.is_in_stock, u.email, u.username
+      SELECT ci.item_id, ci.user_id, ci.group_id, ci.item_name, ci.product_url, ci.current_price, ci.is_in_stock, u.email, u.username
       FROM cart_items ci
       JOIN users u ON u.user_id = ci.user_id
       WHERE ci.is_purchased = false AND ci.product_url IS NOT NULL
@@ -736,6 +840,10 @@ async function runPriceCheckCycle(): Promise<void> {
         typeof row.is_in_stock === "boolean" ? row.is_in_stock : true;
       const userEmail = String(row.email || "").trim();
       const username = String(row.username || "").trim();
+      const rowGroupId =
+        row.group_id != null && Number.isFinite(Number(row.group_id))
+          ? Number(row.group_id)
+          : null;
 
       if (!productUrl) continue;
       const snapshot = await fetchProductSnapshotFromUrl(productUrl);
@@ -750,13 +858,12 @@ async function runPriceCheckCycle(): Promise<void> {
       }
 
       if (latestInStock === false && previousInStock === true) {
-        await pool.query(
-          `
-          INSERT INTO notifications (user_id, item_id, message, is_read)
-          VALUES ($1, $2, $3, false)
-          `,
-          [userId, itemId, `${itemName} is currently out of stock.`]
-        ).catch(() => {});
+        await insertUserNotification({
+          userId,
+          itemId,
+          groupId: rowGroupId,
+          message: `${itemName} is currently out of stock.`,
+        });
         if (userEmail) {
           await sendOutOfStockEmail({
             toEmail: userEmail,
@@ -782,17 +889,12 @@ async function runPriceCheckCycle(): Promise<void> {
       );
 
       if (latestPrice < previousPrice) {
-        await pool.query(
-          `
-          INSERT INTO notifications (user_id, item_id, message, is_read)
-          VALUES ($1, $2, $3, false)
-          `,
-          [
-            userId,
-            itemId,
-            `Price dropped for ${itemName}: $${previousPrice.toFixed(2)} -> $${latestPrice.toFixed(2)}`,
-          ]
-        );
+        await insertUserNotification({
+          userId,
+          itemId,
+          groupId: rowGroupId,
+          message: `Price dropped for ${itemName}: $${previousPrice.toFixed(2)} -> $${latestPrice.toFixed(2)}`,
+        });
         if (userEmail) {
           await sendPriceDropEmail({
             toEmail: userEmail,
@@ -863,6 +965,11 @@ async function initializeDatabase(): Promise<void> {
     await pool.query(
       `CREATE INDEX IF NOT EXISTS idx_group_comments_group ON group_comments(group_id)`
     );
+    await pool.query(`
+      ALTER TABLE notifications ADD COLUMN IF NOT EXISTS group_id INTEGER
+        REFERENCES groups(group_id) ON DELETE CASCADE
+    `);
+    await pool.query(`ALTER TABLE notifications ALTER COLUMN item_id DROP NOT NULL`);
     await pool.query(`
       INSERT INTO item_private_notes (item_id, user_id, body, updated_at)
       SELECT ci.item_id, ci.user_id, ci.notes, ci.created_at
@@ -1522,7 +1629,7 @@ app.delete(
 // frontend pull real data
 // FRONTEND LINK:
 // - Extension and pages call /api/cart-items for item lists.
-// - Notifications panel calls /api/notifications.
+// - Notifications: GET /api/notifications, PATCH /api/notifications/:id, POST /api/notifications/mark-all-read.
 // - Analytics page calls /api/analytics/spending.
 
 app.get("/api/users", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -1667,7 +1774,7 @@ app.get("/api/notifications", authenticateToken, async (req: AuthRequest, res: R
   try {
     const owner_id = req.user!.userId;
     const result = await pool.query(
-      "SELECT * FROM notifications WHERE user_id = $1 ORDER BY notification_id ASC",
+      "SELECT * FROM notifications WHERE user_id = $1 ORDER BY notification_id DESC",
       [owner_id]
     );
     res.status(200).json(result.rows);
@@ -1676,6 +1783,53 @@ app.get("/api/notifications", authenticateToken, async (req: AuthRequest, res: R
     res.status(500).json({ message: "Failed to fetch notifications" });
   }
 });
+
+app.post("/api/notifications/mark-all-read", authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    await pool.query(`UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read = false`, [
+      userId,
+    ]);
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    console.error("Mark all notifications read failed:", error);
+    res.status(500).json({ message: "Failed to update notifications" });
+  }
+});
+
+app.patch(
+  "/api/notifications/:id",
+  authenticateToken,
+  async (req: AuthRequest<{ is_read?: boolean }, { id: string }>, res: Response) => {
+    try {
+      const userId = req.user!.userId;
+      const notificationId = Number(req.params.id);
+      if (!Number.isFinite(notificationId) || notificationId < 1) {
+        return res.status(400).json({ message: "Invalid notification id" });
+      }
+      const isRead = req.body?.is_read;
+      if (typeof isRead !== "boolean") {
+        return res.status(400).json({ message: "is_read (boolean) is required" });
+      }
+      const result = await pool.query(
+        `
+        UPDATE notifications
+        SET is_read = $1
+        WHERE notification_id = $2 AND user_id = $3
+        RETURNING *
+        `,
+        [isRead, notificationId, userId]
+      );
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Notification not found" });
+      }
+      res.status(200).json(result.rows[0]);
+    } catch (error) {
+      console.error("Patch notification failed:", error);
+      res.status(500).json({ message: "Failed to update notification" });
+    }
+  }
+);
 
 app.get("/api/price-history", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
@@ -1923,24 +2077,30 @@ app.post(
         inviteUrl,
       });
 
-      // Try to surface a join event in in-app notifications using any item in the shared list.
-      // notifications.item_id is NOT NULL, so we can only create one if this list already has at least one item.
       const firstGroupItem = await pool.query(
         `SELECT item_id FROM cart_items WHERE group_id = $1 ORDER BY item_id ASC LIMIT 1`,
         [group_id]
       );
-      if (firstGroupItem.rows.length > 0) {
-        const itemId = firstGroupItem.rows[0].item_id;
-        const invitedLabel = invitedUser.username || invitedUser.email || "A user";
-        const groupLabel = ownedGroup.rows[0].group_name || "Shared wishlist";
-        await pool.query(
-          `
-          INSERT INTO notifications (user_id, item_id, message, is_read)
-          VALUES ($1, $2, $3, false)
-          `,
-          [owner_id, itemId, `${invitedLabel} joined "${groupLabel}" as Editor.`]
-        );
-      }
+      const anchorItemId =
+        firstGroupItem.rows.length > 0 ? Number(firstGroupItem.rows[0].item_id) : null;
+      const invitedLabel = invitedUser.username || invitedUser.email || "A user";
+      const groupLabel = ownedGroup.rows[0].group_name || "Shared wishlist";
+      const ownerDisplay =
+        ownedGroup.rows[0].owner_username || ownedGroup.rows[0].owner_email || "Someone";
+
+      await insertUserNotification({
+        userId: invitedUser.user_id,
+        itemId: anchorItemId,
+        groupId: group_id,
+        message: `${ownerDisplay} invited you to collaborate on "${groupLabel}".`,
+      });
+
+      await insertUserNotification({
+        userId: owner_id,
+        itemId: anchorItemId,
+        groupId: group_id,
+        message: `${invitedLabel} joined "${groupLabel}" as Editor.`,
+      });
 
       return res.status(200).json({
         message: emailResult.sent
@@ -2239,7 +2399,7 @@ app.patch(
 
       const ownerCheck = await pool.query(
         `
-        SELECT user_id, group_id, current_price, item_name
+        SELECT user_id, group_id, current_price, item_name, is_in_stock
         FROM cart_items
         WHERE item_id = $1
         `,
@@ -2249,6 +2409,12 @@ app.patch(
       if (ownerCheck.rows.length === 0) {
         return res.status(404).json({ message: "Item not found" });
       }
+
+      const itemGroupIdForNotify =
+        ownerCheck.rows[0].group_id != null &&
+        Number.isFinite(Number(ownerCheck.rows[0].group_id))
+          ? Number(ownerCheck.rows[0].group_id)
+          : null;
 
       const canEdit = await userCanEditCartItemRow(owner_id, {
         user_id: ownerCheck.rows[0].user_id,
@@ -2307,17 +2473,12 @@ app.patch(
             : previousPrice;
         if (current_price !== undefined && nextPrice < previousPrice) {
           const itemOwnerId = ownerCheck.rows[0].user_id;
-          await pool.query(
-            `
-            INSERT INTO notifications (user_id, item_id, message, is_read)
-            VALUES ($1, $2, $3, false)
-            `,
-            [
-              itemOwnerId,
-              item_id,
-              `Price dropped for ${previousItemName}: $${previousPrice.toFixed(2)} -> $${nextPrice.toFixed(2)}`,
-            ]
-          ).catch(() => {});
+          await insertUserNotification({
+            userId: itemOwnerId,
+            itemId: item_id,
+            groupId: itemGroupIdForNotify,
+            message: `Price dropped for ${previousItemName}: $${previousPrice.toFixed(2)} -> $${nextPrice.toFixed(2)}`,
+          });
           const notifyUser = await storage.getUser(itemOwnerId);
           const ownerEmail = String(notifyUser?.email || "").trim();
           if (ownerEmail) {
@@ -2327,6 +2488,34 @@ app.patch(
               itemName: previousItemName,
               previousPrice,
               latestPrice: nextPrice,
+              dashboardUrl: `${getFrontendBaseUrl()}/dashboard`,
+            }).catch(() => {});
+          }
+        }
+
+        const previousInStockRow =
+          typeof ownerCheck.rows[0].is_in_stock === "boolean"
+            ? ownerCheck.rows[0].is_in_stock
+            : true;
+        if (
+          mergedInStock !== undefined &&
+          mergedInStock === false &&
+          previousInStockRow === true
+        ) {
+          const itemOwnerId = Number(ownerCheck.rows[0].user_id);
+          await insertUserNotification({
+            userId: itemOwnerId,
+            itemId: item_id,
+            groupId: itemGroupIdForNotify,
+            message: `${previousItemName} is currently out of stock.`,
+          });
+          const notifyUser = await storage.getUser(itemOwnerId);
+          const ownerEmail = String(notifyUser?.email || "").trim();
+          if (ownerEmail) {
+            await sendOutOfStockEmail({
+              toEmail: ownerEmail,
+              toName: notifyUser?.username || ownerEmail,
+              itemName: previousItemName,
               dashboardUrl: `${getFrontendBaseUrl()}/dashboard`,
             }).catch(() => {});
           }
