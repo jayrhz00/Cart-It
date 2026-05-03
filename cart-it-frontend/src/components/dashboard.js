@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './sidebar';
-import { LuCirclePlus } from "react-icons/lu";
+import { LuCirclePlus, LuTrash2 } from "react-icons/lu";
 import '../styles/dashboard.css';
 import { apiRequest } from './api';
 
@@ -20,6 +20,8 @@ const Dashboard = () => {
   const [newWishlistVisibility, setNewWishlistVisibility] = useState("Private");
   const [moveTargets, setMoveTargets] = useState({});
   const [togglingPurchasedId, setTogglingPurchasedId] = useState(null);
+  const [deletingGroupId, setDeletingGroupId] = useState(null);
+  const [deletingItemId, setDeletingItemId] = useState(null);
 
   const reload = useCallback(async () => {
     const [groups, items] = await Promise.all([
@@ -144,6 +146,49 @@ const Dashboard = () => {
     }
   };
 
+  const handleDeleteCartItem = async (item) => {
+    const itemId = item?.item_id;
+    if (!itemId) return;
+    const label = (item.item_name || "this item").slice(0, 80);
+    if (!window.confirm(`Remove “${label}” from your items? This cannot be undone.`)) return;
+    setDeletingItemId(itemId);
+    try {
+      await apiRequest(`/api/cart-items/${itemId}`, { method: "DELETE" });
+      setMoveTargets((prev) => {
+        const next = { ...prev };
+        delete next[itemId];
+        return next;
+      });
+      await reload();
+    } catch (error) {
+      alert(error.message || "Could not remove this item.");
+    } finally {
+      setDeletingItemId(null);
+    }
+  };
+
+  const handleDeleteWishlist = async (list) => {
+    const id = list.group_id ?? list.id;
+    if (!id) return;
+    const label = (list.group_name ?? list.name ?? "this wishlist").slice(0, 80);
+    if (
+      !window.confirm(
+        `Delete wishlist “${label}”? Saved items stay in your account but leave this list (they become uncategorized). This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setDeletingGroupId(id);
+    try {
+      await apiRequest(`/api/groups/${id}`, { method: "DELETE" });
+      await reload();
+    } catch (error) {
+      alert(error.message || "Could not delete this wishlist.");
+    } finally {
+      setDeletingGroupId(null);
+    }
+  };
+
   return (
     <div className="dashboard-container">
       <Sidebar wishlists={normalizeSidebarLists} showExtension={true} />
@@ -171,24 +216,42 @@ const Dashboard = () => {
                 const label = list.group_name ?? list.name ?? "Untitled";
                 const n = groupItemCount(id);
                 const visibility = String(list.visibility || "Private");
+                const canDelete =
+                  String(list.access_role || "").toLowerCase() === "owner";
                 return (
-                  <button
-                    type="button"
-                    key={id}
-                    className="wishlist-card"
-                    onClick={() => navigate(`/wishlist/${id}`)}
-                  >
-                    <div className="wishlist-img-placeholder" />
-                    <div className="wishlist-card-footer">
-                      <span className="wishlist-card-name">{label}</span>
-                      <span className="text-[11px] font-semibold text-orange-700">
-                        {visibility}
-                      </span>
-                      <span className="wishlist-item-count">
-                        {n} {n === 1 ? "item" : "items"}
-                      </span>
-                    </div>
-                  </button>
+                  <div key={id} className="wishlist-card">
+                    {canDelete ? (
+                      <button
+                        type="button"
+                        className="wishlist-card-delete"
+                        disabled={deletingGroupId === id}
+                        title="Delete wishlist"
+                        aria-label={`Delete wishlist ${label}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteWishlist(list);
+                        }}
+                      >
+                        <LuTrash2 size={16} aria-hidden />
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="wishlist-card-main"
+                      onClick={() => navigate(`/wishlist/${id}`)}
+                    >
+                      <div className="wishlist-img-placeholder" />
+                      <div className="wishlist-card-footer">
+                        <span className="wishlist-card-name">{label}</span>
+                        <span className="text-[11px] font-semibold text-orange-700">
+                          {visibility}
+                        </span>
+                        <span className="wishlist-item-count">
+                          {n} {n === 1 ? "item" : "items"}
+                        </span>
+                      </div>
+                    </button>
+                  </div>
                 );
               })
             ) : (
@@ -249,14 +312,26 @@ const Dashboard = () => {
               {recentItems.length > 0 ? (
                 recentItems.slice(0, 8).map((item) => (
                   <div key={item.item_id} className="cart-item-card text-left text-black">
-                    <img
-                      src={item.image_url || "/logo.png"}
-                      alt={item.item_name || "Item"}
-                      className="h-20 w-full rounded object-cover"
-                      onError={(e) => {
-                        e.currentTarget.src = "/logo.png";
-                      }}
-                    />
+                    <div className="recent-cart-item-image-wrap">
+                      <button
+                        type="button"
+                        className="dashboard-recent-item-delete"
+                        disabled={deletingItemId === item.item_id}
+                        title="Remove item"
+                        aria-label={`Remove ${item.item_name || "item"}`}
+                        onClick={() => handleDeleteCartItem(item)}
+                      >
+                        <LuTrash2 size={14} aria-hidden />
+                      </button>
+                      <img
+                        src={item.image_url || "/logo.png"}
+                        alt={item.item_name || "Item"}
+                        className="h-20 w-full rounded object-cover"
+                        onError={(e) => {
+                          e.currentTarget.src = "/logo.png";
+                        }}
+                      />
+                    </div>
                     <p className="truncate text-sm font-bold">
                       {item.item_name}
                     </p>

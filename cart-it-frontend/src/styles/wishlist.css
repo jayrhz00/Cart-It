@@ -22,10 +22,26 @@
   /* Toolbar */
   .toolbar { @apply flex flex-wrap gap-3 mt-6 mb-10; }
   .tool-btn { 
-    @apply flex items-center gap-2 px-5 py-2.5 rounded-lg bg-white border border-gray-300 
-    text-gray-700 font-medium hover:bg-gray-100 transition-all shadow-sm; 
+    @apply inline-flex items-center justify-center gap-2 min-h-[2.75rem] px-4 py-2 rounded-lg bg-white border border-gray-300 
+    text-gray-700 font-medium hover:bg-gray-100 transition-all shadow-sm text-sm; 
   }
   .tool-btn.edit { @apply bg-[#DB8046] text-white border-transparent hover:bg-[#b86835]; }
+
+  .toolbar-filter-wrap {
+    @apply inline-flex items-center gap-2 min-h-[2.75rem] pl-3 pr-2 rounded-lg bg-white border border-gray-300
+    text-gray-700 shadow-sm text-sm;
+  }
+  .toolbar-filter-select {
+    @apply min-w-[10.5rem] max-w-[14rem] border-0 bg-transparent py-2 text-sm font-medium text-gray-800
+    focus:ring-0 focus:outline-none cursor-pointer;
+  }
+
+  .wishlist-item-remove {
+    @apply absolute top-3 right-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full
+    border border-gray-200 bg-white/95 text-gray-600 shadow-sm
+    hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors
+    disabled:opacity-50 disabled:pointer-events-none;
+  }
 
   /* Item Grid */
   .item-grid { @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6; }
