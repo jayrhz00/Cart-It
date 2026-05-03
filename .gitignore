@@ -141,3 +141,10 @@ build/
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Cart-It — local store uploads / packaged extensions (not application source)
+cart-it-chrome-webstore-upload.zip
+cart-it-frontend/public/cart-it-extension.zip
+extension/cart-it-extension-store.zip
+public/cart-it-extension.zip
+release/
