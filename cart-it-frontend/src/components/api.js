@@ -37,3 +37,22 @@ export async function apiRequest(path, options = {}) {
 
   return data;
 }
+
+/** Unauthenticated GET for public share pages (JWT in URL path). */
+export async function publicApiGet(path) {
+  const response = await fetch(`${API_BASE_URL}${path}`);
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (_e) {
+    data = null;
+  }
+  if (!response.ok) {
+    const message =
+      (data && data.message) ||
+      (typeof data === "string" ? data : null) ||
+      `Request failed (HTTP ${response.status})`;
+    throw new Error(message);
+  }
+  return data;
+}

@@ -116,12 +116,15 @@ const Cart = () => {
   };
 
   const handleShare = async () => {
-    const url = window.location.href;
     try {
+      const { token } = await apiRequest("/api/me/public-cart-token");
+      const url = `${window.location.origin}/share/${encodeURIComponent(token)}`;
       await navigator.clipboard.writeText(url);
-      alert("Link copied to clipboard.");
-    } catch {
-      window.prompt("Copy this link:", url);
+      alert(
+        "Share link copied. Anyone with the link can view your open (unpurchased) items."
+      );
+    } catch (e) {
+      alert(e.message || "Could not create a share link.");
     }
   };
 

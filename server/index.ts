@@ -1269,6 +1269,147 @@ app.get("/api/me", authenticateToken, async (req: AuthRequest, res: Response) =>
   }
 });
 
+/** Signed URL token for read-only /share/:token (cart). No DB migration — JWT embeds owner user id. */
+app.get("/api/me/public-cart-token", authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const token = jwt.sign(
+      { purpose: "public_cart", userId: req.user!.userId },
+      process.env.JWT_SECRET as string,
+      { expiresIn: "90d" }
+    );
+    return res.status(200).json({ token });
+  } catch (error) {
+    console.error("public-cart-token failed:", error);
+    return res.status(500).json({ message: "Could not create share link" });
+  }
+});
+
+/** Signed URL token for read-only wishlist share (/share-wishlist/:token/:groupId). */
+app.get(
+  "/api/groups/:id/public-share-token",
+  authenticateToken,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const group_id = Number(req.params.id);
+      const userId = req.user!.userId;
+      if (isNaN(group_id)) {
+        return res.status(400).json({ message: "Invalid group ID" });
+      }
+      const allowed = await userCanAccessGroup(userId, group_id);
+      if (!allowed) {
+        return res.status(404).json({ message: "Wishlist not found" });
+      }
+      const token = jwt.sign(
+        { purpose: "public_group", groupId: group_id },
+        process.env.JWT_SECRET as string,
+        { expiresIn: "90d" }
+      );
+      return res.status(200).json({ token });
+    } catch (error) {
+      console.error("public-share-token failed:", error);
+      return res.status(500).json({ message: "Could not create share link" });
+    }
+  }
+);
+
+function shapePublicCartRow(
+  row: Record<string, unknown>,
+  extras: Record<string, unknown> = {}
+): Record<string, unknown> {
+  return {
+    item_id: row.item_id,
+    product_name: row.item_name,
+    store_name: row.store ?? "—",
+    price: row.current_price,
+    product_url: row.product_url,
+    image_url: row.image_url,
+    username: row.username ?? null,
+    ...extras,
+  };
+}
+
+/** Read-only: unpurchased items for the cart owner (matches “still shopping” snapshot). */
+app.get("/api/public/cart/:token", async (req: Request, res: Response) => {
+  try {
+    const raw = String(req.params.token || "").trim();
+    const decoded = jwt.verify(raw, process.env.JWT_SECRET as string) as {
+      purpose?: string;
+      userId?: number;
+    };
+    if (decoded.purpose !== "public_cart" || !decoded.userId) {
+      return res.status(400).json({ message: "Invalid share link" });
+    }
+    const result = await pool.query(
+      `
+      SELECT ci.*, u.username
+      FROM cart_items ci
+      JOIN users u ON u.user_id = ci.user_id
+      WHERE ci.user_id = $1 AND ci.is_purchased = false
+      ORDER BY ci.item_id DESC
+      `,
+      [decoded.userId]
+    );
+    return res
+      .status(200)
+      .json(result.rows.map((r) => shapePublicCartRow(r as Record<string, unknown>)));
+  } catch {
+    return res.status(400).json({ message: "Invalid or expired share link" });
+  }
+});
+
+/** Read-only: unpurchased items in a wishlist when token matches group id. */
+app.get(
+  "/api/public/wishlist/:token/:groupId",
+  async (req: Request, res: Response) => {
+    try {
+      const raw = String(req.params.token || "").trim();
+      const groupId = Number(req.params.groupId);
+      const decoded = jwt.verify(raw, process.env.JWT_SECRET as string) as {
+        purpose?: string;
+        groupId?: number;
+      };
+      if (
+        decoded.purpose !== "public_group" ||
+        !decoded.groupId ||
+        Number(decoded.groupId) !== groupId ||
+        isNaN(groupId)
+      ) {
+        return res.status(400).json({ message: "Invalid share link" });
+      }
+      const g = await pool.query(
+        `SELECT group_id, group_name, owner_id FROM groups WHERE group_id = $1`,
+        [groupId]
+      );
+      if (g.rows.length === 0) {
+        return res.status(404).json({ message: "List not found" });
+      }
+      const owner = await storage.getUser(Number(g.rows[0].owner_id));
+      const groupName = String(g.rows[0].group_name || "Wishlist");
+      const items = await pool.query(
+        `
+        SELECT ci.*, u.username
+        FROM cart_items ci
+        JOIN users u ON u.user_id = ci.user_id
+        WHERE ci.group_id = $1 AND ci.is_purchased = false
+        ORDER BY ci.item_id DESC
+        `,
+        [groupId]
+      );
+      const ownerName = owner?.username ?? items.rows[0]?.username ?? "Someone";
+      return res.status(200).json(
+        items.rows.map((r) =>
+          shapePublicCartRow(r as Record<string, unknown>, {
+            wishlist_name: groupName,
+            username: ownerName,
+          })
+        )
+      );
+    } catch {
+      return res.status(400).json({ message: "Invalid or expired share link" });
+    }
+  }
+);
+
 // GROUP ROUTES
 // FRONTEND LINK:
 // - Dashboard page calls /api/groups to render wishlist cards.
@@ -1850,6 +1991,52 @@ app.get("/api/price-history", authenticateToken, async (req: AuthRequest, res: R
     res.status(500).json({ message: "Failed to fetch price history" });
   }
 });
+
+/** Price chart data for one item (modal). Rows shaped as `{ date, price }` for Recharts. */
+app.get(
+  "/api/cart-items/:id/price-history",
+  authenticateToken,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const item_id = Number(req.params.id);
+      const userId = req.user!.userId;
+      if (!Number.isFinite(item_id)) {
+        return res.status(400).json({ message: "Invalid item ID" });
+      }
+      const row = await pool.query(
+        `SELECT user_id, group_id FROM cart_items WHERE item_id = $1`,
+        [item_id]
+      );
+      if (row.rows.length === 0) {
+        return res.status(404).json({ message: "Item not found" });
+      }
+      const can = await userCanEditCartItemRow(userId, {
+        user_id: row.rows[0].user_id,
+        group_id: row.rows[0].group_id,
+      });
+      if (!can) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      const hist = await pool.query(
+        `
+        SELECT price, recorded_at
+        FROM price_history
+        WHERE item_id = $1
+        ORDER BY recorded_at ASC, history_id ASC
+        `,
+        [item_id]
+      );
+      const chart = hist.rows.map((h) => ({
+        date: new Date(String(h.recorded_at)).toLocaleDateString(),
+        price: Number(h.price),
+      }));
+      return res.status(200).json(chart);
+    } catch (error) {
+      console.error("Fetch item price history failed:", error);
+      return res.status(500).json({ message: "Failed to fetch price history" });
+    }
+  }
+);
 
 /**
  * GET /api/analytics/spending — numbers for charts / dashboard cards.

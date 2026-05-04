@@ -52,6 +52,9 @@ const Wishlist = () => {
   const [noteDrafts, setNoteDrafts] = useState({});
   const [savingNoteId, setSavingNoteId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [editMode, setEditMode] = useState(false);
+  const [selected, setSelected] = useState({});
+  const [moveGroupId, setMoveGroupId] = useState("");
 
   const groupId = Number(id);
 
@@ -202,13 +205,79 @@ const Wishlist = () => {
     }
   };
 
+  const toggleSelect = (id) => {
+    setSelected((s) => ({ ...s, [id]: !s[id] }));
+  };
+
   const handleShare = async () => {
-    const url = window.location.href;
     try {
+      const { token } = await apiRequest(`/api/groups/${groupId}/public-share-token`);
+      const url = `${window.location.origin}/share-wishlist/${encodeURIComponent(token)}/${groupId}`;
       await navigator.clipboard.writeText(url);
-      alert("Link copied to clipboard.");
-    } catch {
-      window.prompt("Copy this link:", url);
+      alert(
+        "Share link copied. Anyone with the link can view unpurchased items on this list."
+      );
+    } catch (e) {
+      alert(e.message || "Could not create share link.");
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    const ids = Object.keys(selected).filter((k) => selected[k]);
+    if (ids.length === 0) {
+      alert("Select items first (turn on Edit, then use checkboxes).");
+      return;
+    }
+    if (
+      !window.confirm(`Remove ${ids.length} item(s) from this wishlist?`)
+    ) {
+      return;
+    }
+    try {
+      for (const idStr of ids) {
+        await apiRequest(`/api/cart-items/${idStr}`, { method: "DELETE" });
+      }
+      setSelected({});
+      setEditMode(false);
+      await loadAll();
+    } catch (e) {
+      alert(e.message || "Could not remove items.");
+    }
+  };
+
+  const handleMoveSelected = async () => {
+    const ids = Object.keys(selected).filter((k) => selected[k]);
+    if (ids.length === 0) {
+      alert("Select items first.");
+      return;
+    }
+    if (moveGroupId === "") {
+      alert("Choose where to move items (another wishlist or Cart only).");
+      return;
+    }
+    const parsed = Number(moveGroupId);
+    const targetGroup = parsed === 0 ? null : parsed;
+    if (parsed !== 0 && !Number.isFinite(parsed)) {
+      alert("Invalid destination.");
+      return;
+    }
+    if (targetGroup !== null && Number(targetGroup) === Number(groupId)) {
+      alert("Pick a different list than this one.");
+      return;
+    }
+    try {
+      for (const idStr of ids) {
+        await apiRequest(`/api/cart-items/${idStr}`, {
+          method: "PATCH",
+          body: JSON.stringify({ group_id: targetGroup }),
+        });
+      }
+      setSelected({});
+      setMoveGroupId("");
+      setEditMode(false);
+      await loadAll();
+    } catch (e) {
+      alert(e.message || "Could not move selected items.");
     }
   };
 
@@ -328,7 +397,51 @@ const Wishlist = () => {
             <button type="button" className="tool-btn edit" onClick={handleRename}>
               <LuPen size={16} /> Rename list
             </button>
+            <button
+              type="button"
+              className={`tool-btn edit ${editMode ? "ring-2 ring-offset-2 ring-[#DB8046]" : ""}`}
+              onClick={() => {
+                setEditMode((e) => !e);
+                if (editMode) setSelected({});
+              }}
+            >
+              {editMode ? "Done" : "Select items"}
+            </button>
+            {editMode ? (
+              <>
+                <select
+                  className="tool-btn"
+                  value={moveGroupId}
+                  onChange={(e) => setMoveGroupId(e.target.value)}
+                  aria-label="Move selected items to"
+                >
+                  <option value="">Move selected to...</option>
+                  <option value="0">Cart only (no wishlist)</option>
+                  {wishlists
+                    .filter((w) => Number(w.group_id ?? w.id) !== Number(groupId))
+                    .map((w) => {
+                      const wid = w.group_id ?? w.id;
+                      const name = w.group_name ?? w.name ?? "Untitled";
+                      return (
+                        <option key={wid} value={wid}>
+                          {name}
+                        </option>
+                      );
+                    })}
+                </select>
+                <button type="button" className="tool-btn" onClick={handleMoveSelected}>
+                  Move selected
+                </button>
+                <button type="button" className="tool-btn" onClick={handleDeleteSelected}>
+                  Remove selected
+                </button>
+              </>
+            ) : null}
           </div>
+          <p className="mt-2 text-sm text-gray-500">
+            Tip: Edit lets you select multiple items to move to your cart or another wishlist, or
+            remove them.
+          </p>
           {String(group?.visibility || "").toLowerCase() === "shared" ? (
             <div className="mb-4 rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700">
               <p className="font-semibold">Members</p>
@@ -364,14 +477,14 @@ const Wishlist = () => {
               <div
                 key={item.item_id}
                 className="item-card"
-                role={item.product_url ? "button" : undefined}
-                tabIndex={item.product_url ? 0 : undefined}
+                role={!editMode && item.product_url ? "button" : undefined}
+                tabIndex={!editMode && item.product_url ? 0 : undefined}
                 onClick={() => {
-                  if (!item.product_url) return;
+                  if (editMode || !item.product_url) return;
                   window.open(item.product_url, "_blank", "noopener,noreferrer");
                 }}
                 onKeyDown={(e) => {
-                  if (!item.product_url) return;
+                  if (editMode || !item.product_url) return;
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     window.open(item.product_url, "_blank", "noopener,noreferrer");
@@ -386,6 +499,15 @@ const Wishlist = () => {
                       e.currentTarget.src = "/logo.png";
                     }}
                   />
+                  {editMode ? (
+                    <input
+                      type="checkbox"
+                      className="select-check"
+                      checked={!!selected[item.item_id]}
+                      onChange={() => toggleSelect(String(item.item_id))}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : null}
                   <button
                     type="button"
                     className="wishlist-item-remove"

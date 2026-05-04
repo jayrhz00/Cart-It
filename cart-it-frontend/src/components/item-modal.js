@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LuX, LuMessageSquare, LuCheck, LuTrash2, LuChevronLeft } from "react-icons/lu";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { getPriceHistory, updateItemNotes } from '../services/api'; 
+import { apiRequest } from './api';
 import '../styles/item-modal.css';
 
 /**
@@ -18,31 +18,44 @@ const ItemDetailModal = ({ item, onClose, onDelete, onMarkPurchased, onAddNote, 
 
   // Side effect to fetch historical price data for the specific item whenever the item ID changes.
   useEffect(() => {
+    if (!item?.item_id) {
+      setPriceHistory([]);
+      return;
+    }
     const fetchHistory = async () => {
       try {
-        const data = await getPriceHistory(item.item_id);
-        setPriceHistory(data);
+        const data = await apiRequest(`/api/cart-items/${item.item_id}/price-history`);
+        setPriceHistory(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Error fetching history:", err);
+        setPriceHistory([]);
       }
     };
-    if (item?.item_id) fetchHistory();
-  }, [item.item_id]);
+    fetchHistory();
+  }, [item?.item_id]);
 
   if (!item) return null;
 
-  const displayPrice = Number(item.price || 0).toFixed(2);
+  const displayPrice = Number(
+    item.current_price ?? item.price ?? 0
+  ).toFixed(2);
+  const productName = item.item_name ?? item.product_name ?? "Item";
+  const storeLabel = item.store ?? item.store_name ?? "—";
 
   // Handles the submission of a new note/comment
   const handleNoteSubmit = async () => {
-    if (newNote.trim()) {
-      try {
-        await updateItemNotes(item.item_id, newNote); 
-        onAddNote(item.item_id, newNote);
-        setNewNote('');
-      } catch (err) {
-        console.error("Failed to save note:", err);
-      }
+    if (!newNote.trim()) return;
+    try {
+      const prev = String(item.notes ?? "").trim();
+      const combined = [prev, newNote.trim()].filter(Boolean).join("\n");
+      await apiRequest(`/api/cart-items/${item.item_id}/notes`, {
+        method: "PATCH",
+        body: JSON.stringify({ notes: combined || null }),
+      });
+      onAddNote(item.item_id, combined);
+      setNewNote('');
+    } catch (err) {
+      console.error("Failed to save note:", err);
     }
   };
 
@@ -58,13 +71,13 @@ const ItemDetailModal = ({ item, onClose, onDelete, onMarkPurchased, onAddNote, 
           <>
             {/* Visual Header: Product Image and Links */}
             <a href={item.product_url} target="_blank" rel="noreferrer" className="img-container">
-              <img src={item.image_url} alt={item.product_name} />
+              <img src={item.image_url} alt={productName} />
               <div className="img-overlay">View Product</div>
             </a>
 
             <div className="details-section">
-              <p className="store-name">{item.store_name}</p>
-              <h2 className="product-name">{item.product_name}</h2>
+              <p className="store-name">{storeLabel}</p>
+              <h2 className="product-name">{productName}</h2>
               <p className="price-tag">${displayPrice}</p>
             </div>
 

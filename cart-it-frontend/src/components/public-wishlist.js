@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { LoadingState, EmptyState } from './feedback';
 import { LuExternalLink } from 'react-icons/lu';
-import { getPublicWishlist } from '../services/api';
+import { publicApiGet } from './api';
 import '../styles/public.css';
 
 /**
@@ -23,12 +23,15 @@ const PublicWishlist = () => {
   //  Use effect to fetch public wishlist data from the API on component mount or when the shareToken/wishlistId change
   
   useEffect(() => {
-    getPublicWishlist(shareToken, wishlistId)
-      .then(data => {
-        if (data && data.length > 0) {
-          setItems(data);
-          setWishlistName(data[0].wishlist_name);
-          setOwner(data[0].username);
+    publicApiGet(
+      `/api/public/wishlist/${encodeURIComponent(shareToken)}/${encodeURIComponent(wishlistId)}`
+    )
+      .then((data) => {
+        const rows = Array.isArray(data) ? data : [];
+        setItems(rows);
+        if (rows.length > 0) {
+          setWishlistName(rows[0].wishlist_name || "");
+          setOwner(rows[0].username || "");
         }
         setIsLoading(false);
       })

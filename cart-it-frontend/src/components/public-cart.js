@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getPublicCart } from '../services/api';
+import { publicApiGet } from './api';
 import { LoadingState, EmptyState } from './feedback';
 import { LuExternalLink } from 'react-icons/lu';
 import '../styles/public.css';
@@ -18,9 +18,9 @@ const PublicCart = () => {
 
   // Fetch the public cart data when the component mounts or when the token changes
   useEffect(() => {
-    getPublicCart(token)
-      .then(data => {
-        setItems(data); // Update the items state with the fetched cart data
+    publicApiGet(`/api/public/cart/${encodeURIComponent(token)}`)
+      .then((data) => {
+        setItems(Array.isArray(data) ? data : []); // Update the items state with the fetched cart data
         setIsLoading(false); // Set loading to false after data is fetched
       })
       .catch(err => {
