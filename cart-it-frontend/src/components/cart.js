@@ -306,6 +306,7 @@ const Cart = () => {
                   <img
                     src={item.image_url || "/logo.png"}
                     alt={item.item_name || "Product"}
+                    referrerPolicy="no-referrer"
                     onError={(e) => {
                       e.currentTarget.src = "/logo.png";
                     }}

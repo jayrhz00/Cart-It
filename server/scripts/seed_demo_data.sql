@@ -2,7 +2,9 @@
 -- Login password for all seeded users: demo123
 --
 -- STUDENT EXPLANATION:
--- - This file inserts safe sample data so you can demo flows quickly.
+-- - The API runs this file on every startup (see initializeDatabase in server/index.ts)
+--   after tables exist, so PostgreSQL gets rows in all six core tables automatically.
+-- - You can also run it manually: psql "$DATABASE_URL" -f server/scripts/seed_demo_data.sql
 -- - It uses ON CONFLICT / NOT EXISTS, so rerunning it will not duplicate rows.
 -- - It creates two users, two groups, membership links, sample items, price history,
 --   and one example notification.

@@ -68,7 +68,7 @@ const ItemDetailModal = ({ item, onClose, onDelete, onMarkPurchased, onAddNote, 
           <>
             {/* Visual Header: Product Image and Links */}
             <a href={item.product_url} target="_blank" rel="noreferrer" className="img-container">
-              <img src={item.image_url} alt={productName} />
+              <img src={item.image_url} alt={productName} referrerPolicy="no-referrer" />
               <div className="img-overlay">View Product</div>
             </a>
 

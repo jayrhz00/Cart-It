@@ -966,6 +966,14 @@ async function initializeDatabase(): Promise<void> {
         REFERENCES groups(group_id) ON DELETE CASCADE
     `);
     await pool.query(`ALTER TABLE notifications ALTER COLUMN item_id DROP NOT NULL`);
+
+    const seedPath = path.join(__dirname, "scripts", "seed_demo_data.sql");
+    const seedSql = await fs.readFile(seedPath, "utf-8");
+    await pool.query(seedSql);
+    console.log(
+      "PostgreSQL demo seed applied (users, groups, group_members, cart_items, price_history, notifications — idempotent)."
+    );
+
     await pool.query(`
       INSERT INTO item_private_notes (item_id, user_id, body, updated_at)
       SELECT ci.item_id, ci.user_id, ci.notes, ci.created_at
@@ -2991,35 +2999,35 @@ app.patch(
   }
 );
 
-// START SERVER
-// FINAL RUNTIME FLOW:
-// 1) Load schema/tables
-// 2) Start HTTP server
-// 3) Start background price/stock worker loop
-async function startServer() {
+// Startup function for Cart-It
+// 1) Sets up db
+// 2) Starts HTTP server so extension can make API calls
+// 3) Starts a background price/stock checker that runs on a timer to update prices
+async function startServer() 
+{
   try {
-    await initializeDatabase();
+    await initializeDatabase(); // Await helps the server not accept requests before tables exist
 
-    app.listen(PORT, "0.0.0.0", () => {
+    app.listen(PORT, "0.0.0.0", () => { // Accepts connections from anywhere 
       console.log(`Server running on http://0.0.0.0:${PORT}`);
     });
 
-    if (PRICE_CHECK_DISABLED) {
+    if (PRICE_CHECK_DISABLED) { //Check an environment variable to decide if the background price checker should run
       console.log(
         "Price checker: disabled (set PRICE_CHECK_ENABLED=true to enable, or set PRICE_CHECK_INTERVAL_MINUTES to a positive number)."
       );
     } else {
-    const intervalMs = Math.max(5, PRICE_CHECK_INTERVAL_MINUTES) * 60 * 1000;
+    const intervalMs = Math.max(5, PRICE_CHECK_INTERVAL_MINUTES) * 60 * 1000; //Enforces a minimum of 5 minutes 
     console.log(`Price checker enabled: every ${Math.max(5, PRICE_CHECK_INTERVAL_MINUTES)} minute(s)`);
-    setTimeout(() => {
+    setTimeout(() => {  // Runs the first price check 15 seconds after startup
       runPriceCheckCycle().catch(() => {});
     }, 15000);
-    setInterval(() => {
+    setInterval(() => { // Runs it repeatedly on selected interval
       runPriceCheckCycle().catch(() => {});
     }, intervalMs);
     }
 
-  } catch (error) {
+  } catch (error) {    // Put for safety purposes so if one failed price occurs it does not crash the whole server
     console.error("Server startup failed:", error);
   }
 }

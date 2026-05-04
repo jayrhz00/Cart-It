@@ -25,6 +25,7 @@ function WishlistCardCover({ imageUrl }) {
       src={src}
       alt=""
       className="wishlist-card-cover"
+      referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
     />
   );
@@ -367,6 +368,7 @@ const Dashboard = () => {
                         src={item.image_url || "/logo.png"}
                         alt={item.item_name || "Item"}
                         className="h-20 w-full rounded object-cover"
+                        referrerPolicy="no-referrer"
                         onError={(e) => {
                           e.currentTarget.src = "/logo.png";
                         }}

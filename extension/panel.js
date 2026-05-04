@@ -43,6 +43,63 @@ function getPageData() {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
   };
 
+  /**
+   * Variant PDPs often put a stale or "from" price in meta / JSON-LD while the real
+   * price for the selected size sits next to Add to cart (including fixed bottom bars).
+   */
+  const pricesFromDollarMatches = (text) => {
+    if (!text) return [];
+    const matches = [...String(text).matchAll(/\$\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/g)];
+    const out = [];
+    for (const m of matches) {
+      const p = parsePriceText(m[1]);
+      if (p != null && p >= 1 && p < 1_000_000) out.push(p);
+    }
+    return out;
+  };
+
+  const priceNearPrimaryAddToCart = () => {
+    const candidates = Array.from(
+      document.querySelectorAll(
+        [
+          'button[name="add"]',
+          'button[id*="AddToCart"]',
+          'button[id*="addtocart"]',
+          'button[class*="add-to-cart"]',
+          'button[class*="AddToCart"]',
+          "[data-add-to-cart]",
+          'button[aria-label*="add to cart"]',
+          'button[aria-label*="Add to cart"]',
+          'button[aria-label*="add to bag"]',
+        ].join(",")
+      )
+    );
+    const btn =
+      candidates.find((b) => /cart|bag|checkout|buy now/i.test(b.textContent || "")) ||
+      Array.from(document.querySelectorAll("button, a")).find((b) =>
+        /^\s*add\s+to\s+cart\s*$/i.test((b.textContent || "").trim())
+      );
+    if (!btn) return null;
+    let node = btn;
+    for (let depth = 0; depth < 14 && node; depth++, node = node.parentElement) {
+      const text = (node.innerText || "").slice(0, 2500);
+      const prices = pricesFromDollarMatches(text);
+      if (!prices.length) continue;
+      const st = window.getComputedStyle(node);
+      const fixedish = st.position === "fixed" || st.position === "sticky";
+      const cls = `${node.className || ""} ${node.id || ""}`;
+      if (fixedish || /sticky|bottom|bar|drawer|atc/i.test(cls)) {
+        return prices[prices.length - 1];
+      }
+    }
+    node = btn;
+    for (let depth = 0; depth < 10 && node; depth++, node = node.parentElement) {
+      const prices = pricesFromDollarMatches((node.innerText || "").slice(0, 2500));
+      if (prices.length) return prices[prices.length - 1];
+    }
+    return null;
+  };
+
   let price = null;
   const parseJsonPrice = (obj) => {
     if (!obj || typeof obj !== "object") return null;
@@ -158,6 +215,14 @@ function getPageData() {
       }
     }
   }
+
+  const nearCartPrice = priceNearPrimaryAddToCart();
+  if (nearCartPrice != null) {
+    if (price == null || Math.abs(nearCartPrice - price) >= 0.5) {
+      price = nearCartPrice;
+    }
+  }
+
   const detectInStock = () => {
     const bodyText = (document.body?.innerText || "").toLowerCase();
     const outPatterns = [

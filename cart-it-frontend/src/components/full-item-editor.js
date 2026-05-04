@@ -229,7 +229,7 @@ export default function FullItemEditor({
           className="full-item-thumb"
         >
           {item.image_url ? (
-            <img src={item.image_url} alt="" />
+            <img src={item.image_url} alt="" referrerPolicy="no-referrer" />
           ) : (
             <span className="full-item-thumb-fallback">{item.item_name?.slice(0, 3)}</span>
           )}

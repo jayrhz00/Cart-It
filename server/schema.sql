@@ -224,10 +224,6 @@ CREATE TABLE IF NOT EXISTS notifications
         ON DELETE CASCADE
 );
 
--- Sample Data (USERS)
-INSERT INTO users (username,email, password_hash)
-VALUES 
-('jessieh', 'jessie@example.com', '$2b$10$hashed1'),
-('alexm', 'alex@gmail.com', '$2b$10$hashed2'),
-('sarahk', 'sarah@yahoo.com', '$2b$10$hashed3')
-ON CONFLICT (email) DO NOTHING;
+-- Sample rows for all six core tables (users, groups, group_members, cart_items,
+-- price_history, notifications) are applied at API startup from scripts/seed_demo_data.sql
+-- (see initializeDatabase in server/index.ts). That keeps DDL here and idempotent DML there.

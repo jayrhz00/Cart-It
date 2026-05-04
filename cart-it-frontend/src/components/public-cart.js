@@ -74,7 +74,12 @@ const PublicCart = () => {
             items.map((item) => (
               <div key={item.item_id} className="public-card group">
                 <div className="public-img-wrapper">
-                  <img src={item.image_url} alt={item.product_name} className="public-img" />
+                  <img
+                    src={item.image_url}
+                    alt={item.product_name}
+                    className="public-img"
+                    referrerPolicy="no-referrer"
+                  />
                   <div className="external-indicator">
                     <LuExternalLink size={18} className="text-gray-600" />
                   </div>

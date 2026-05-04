@@ -105,7 +105,12 @@ export default function CartPage() {
                 <div key={item.item_id} className="cart-readonly-card">
                   <a href={item.product_url} target="_blank" rel="noreferrer" className="cart-readonly-media">
                     {item.image_url ? (
-                      <img src={item.image_url} alt={item.item_name} className="cart-readonly-image" />
+                      <img
+                        src={item.image_url}
+                        alt={item.item_name}
+                        className="cart-readonly-image"
+                        referrerPolicy="no-referrer"
+                      />
                     ) : (
                       <div className="cart-readonly-image cart-readonly-image-fallback">No image</div>
                     )}
