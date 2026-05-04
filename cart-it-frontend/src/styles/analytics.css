@@ -3,33 +3,80 @@
 @tailwind utilities;
 
 @layer components {
-  /* Layout matches your Wishlist/Cart page */
-  .page-wrapper { @apply flex h-screen overflow-hidden bg-white; }
-  .sidebar-container-wrapper { @apply w-64 border-r border-gray-200 flex-shrink-0; }
-  .detail-main { @apply flex-1 p-12 overflow-y-auto h-full bg-gray-50; }
+  /* Global Wrapper & Layout */
+  .page-wrapper {
+    @apply flex h-screen overflow-hidden bg-white;
+  }
+  .sidebar-container-wrapper {
+    @apply w-64 border-r border-gray-200 flex-shrink-0;
+  }
+  .detail-main {
+    @apply flex-1 p-12 overflow-y-auto h-full bg-gray-100;
+  }
 
-  /* Header Controls */
-  .analytics-header { @apply flex justify-between items-start mb-10; }
-  .toggle-group { @apply flex gap-2 bg-white p-1 rounded-lg border border-gray-200; }
-  .toggle-group button { @apply px-4 py-2 rounded text-sm font-medium text-gray-600 transition-all; }
-  .toggle-group button.active { @apply bg-[#DB8046] text-white shadow-md; }
+  /* Navigation & Typography */
+  .back-link {
+    @apply flex items-center gap-2 mb-4 text-gray-500 hover:text-gray-800 transition-colors;
+  }
+  .analytics-header {
+    @apply flex justify-between items-start mb-10;
+  }
+  .wishlist-title {
+    @apply text-3xl font-bold text-gray-900;
+  }
+  .subtitle {
+    @apply text-gray-500;
+  }
 
+<<<<<<< HEAD
+  /* Timeframe Filter Toggles */
+  .toggle-group {
+    @apply flex gap-2 bg-white p-1 rounded-lg border border-gray-200;
+  }
+  .toggle-group button {
+    @apply px-4 py-2 rounded text-sm font-medium text-gray-600 transition-all;
+  }
+  .toggle-group button.active {
+    @apply bg-[#DB8046] text-white shadow-md;
+  }
+=======
   /* Stats */
   .total-label { @apply text-gray-500 font-medium; }
   .total-amount { @apply text-4xl font-bold text-gray-900 mb-2; }
   .subtitle { @apply text-gray-500; }
   .stats-summary { @apply mb-8; }
+>>>>>>> 4c963f342e023986f12ef53383f9a37ed35d6012
 
-  /* Charts Grid */
-  .charts-grid { @apply grid grid-cols-1 lg:grid-cols-2 gap-8; }
-  .chart-card { @apply bg-white p-8 rounded-xl shadow-sm border border-gray-200; }
-  .card-header { @apply text-lg font-bold text-gray-900 mb-6; }
+  /* Financial Summary Display */
+  .total-label {
+    @apply text-gray-500 font-medium;
+  }
+  .total-amount {
+    @apply text-4xl font-bold text-gray-900 mb-8;
+  }
 
-  /* Placeholder Bars */
-  .bar { @apply h-4 bg-gray-200 rounded-full mb-4 w-full; }
-  .bar .fill { @apply h-full bg-[#4A103D] rounded-full; }
+  /* Grid System for Charts */
+  .charts-grid {
+    @apply grid grid-cols-1 lg:grid-cols-2 gap-8;
+  }
+  .chart-card {
+    @apply bg-white p-8 rounded-xl shadow-sm border border-gray-200;
+  }
+  .pie-card-min-height {
+    @apply min-h-[565px];
+  }
+  .card-header {
+    @apply text-lg font-bold text-gray-900 mb-6;
+  }
+  .focus-indicator {
+    @apply text-xs text-gray-400 uppercase tracking-wider font-semibold;
+  }
 
-  /* Pie Chart Placeholder */
-  .pie-container { @apply flex flex-col items-center justify-center; }
-  .pie-circle { @apply w-48 h-48 rounded-full border-[20px] border-t-[#DB8046] border-r-[#4A103D] border-b-gray-300 border-l-gray-300; }
+  /* Empty State Feedback */
+  .empty-state-wrapper {
+    @apply flex flex-col items-center justify-center h-64 border-2 border-dashed border-gray-100 rounded-xl bg-gray-50/30;
+  }
+  .empty-state-text {
+    @apply text-gray-400 italic text-sm;
+  }
 }

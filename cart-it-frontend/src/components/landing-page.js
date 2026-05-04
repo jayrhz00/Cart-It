@@ -28,7 +28,7 @@ const LandingPage = () => {
       {/* How it works: 3-step process cards */}
       <section className="section-padding">
         <div className="steps-wrapper">
-          <h2 className="section-title">How It Works</h2>
+          <h2 className="landing-section-title">How It Works</h2>
           <p className="section-subtitle">Easily save, track, and manage your shopping in just a few steps.</p>
           
           <div className="steps-grid">

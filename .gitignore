@@ -148,3 +148,5 @@ cart-it-frontend/public/cart-it-extension.zip
 extension/cart-it-extension-store.zip
 public/cart-it-extension.zip
 release/
+
+.DS_Store

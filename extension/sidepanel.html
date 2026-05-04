@@ -80,10 +80,19 @@
         border: 1px solid #cbd5e1;
         border-radius: 8px;
         font-family: inherit;
+        background: #fff;
+        min-height: 40px;
       }
       textarea {
         min-height: 72px;
         resize: vertical;
+      }
+      input:focus,
+      textarea:focus,
+      select:focus {
+        outline: none;
+        border-color: #db8046;
+        box-shadow: 0 0 0 2px rgba(219, 128, 70, 0.25);
       }
       button {
         margin-top: 14px;
