@@ -1,0 +1,16 @@
+Cart-It — what lives where (after cleanup)
+
+  cart-it-frontend/     React app → build with: npm run frontend:build (or cd cart-it-frontend && npm run build)
+                        Deploy this folder to Cloudflare Pages (build output: cart-it-frontend/build).
+
+  server/               Express + TypeScript API + Postgres. Render uses server/ per render.yaml.
+
+  extension/            Chrome/Edge MV3 extension (and manifest.firefox.json for Firefox packaging).
+
+  shared/               Types/schema shared with server (e.g. shared/schema.ts).
+
+  render.yaml           Render blueprint for the API service (and optional cron).
+
+  scripts/              Optional tooling (e.g. Chrome Web Store screenshot resize script).
+
+Root package.json only wires npm scripts to the folders above — no duplicate React tree at repo root.
