@@ -21,17 +21,7 @@
   .create-wishlist-btn { @apply h-44 md:h-48 bg-[#DB8046] p-6 rounded-[28px] md:rounded-[40px] flex flex-col items-center justify-center space-y-3 transition-transform hover:scale-105; }
   .create-wishlist-label { @apply text-xs italic font-semibold; }
   
-  .wishlist-card { @apply relative bg-white rounded-t-3xl rounded-b-lg p-2 flex flex-col items-center min-w-0; }
-  .wishlist-card-main {
-    @apply w-full flex flex-col items-center min-w-0 cursor-pointer border-0 bg-transparent p-0 text-inherit
-    transition-transform hover:scale-[1.02] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 rounded-lg;
-  }
-  .wishlist-card-delete {
-    @apply absolute top-2 right-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full
-    border border-gray-200 bg-white text-gray-600 shadow-sm
-    hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors
-    disabled:opacity-50 disabled:pointer-events-none;
-  }
+  .wishlist-card { @apply bg-white rounded-t-3xl rounded-b-lg p-2 flex flex-col items-center min-w-0; }
   .wishlist-img-placeholder { @apply w-28 h-28 bg-[#DB8046] rounded-t-2xl rounded-b-md flex items-center justify-center; }
   .wishlist-card-footer { @apply w-full flex justify-between items-center gap-2 px-1 py-1 mt-1 min-w-0; }
   .wishlist-card-name { @apply font-bold text-black truncate; }
@@ -61,14 +51,6 @@
   .cart-grid { @apply grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4; }
   .cart-placeholder { @apply h-16 bg-white/20 rounded-lg; }
   .cart-item-card { @apply bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-1 min-w-0; }
-
-  .recent-cart-item-image-wrap { @apply relative; }
-  .dashboard-recent-item-delete {
-    @apply absolute top-1 right-1 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full
-    border border-slate-200 bg-white text-slate-600 shadow-sm
-    hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors
-    disabled:opacity-50 disabled:pointer-events-none;
-  }
 
 }
 
