@@ -40,6 +40,7 @@ const Cart = () => {
   const [moveGroupId, setMoveGroupId] = useState("");
   const [noteDrafts, setNoteDrafts] = useState({});
   const [savingNoteId, setSavingNoteId] = useState(null);
+  const [togglingPurchasedId, setTogglingPurchasedId] = useState(null);
 
   const load = useCallback(async () => {
     if (!localStorage.getItem("token")) {
@@ -63,6 +64,14 @@ const Cart = () => {
       return next;
     });
   }, [navigate]);
+
+  const notifyItemsUpdated = () => {
+    try {
+      window.dispatchEvent(new Event("cartit:items-updated"));
+    } catch (_) {
+      /* ignore */
+    }
+  };
 
   useEffect(() => {
     load().catch((e) => console.error(e));
@@ -183,10 +192,33 @@ const Cart = () => {
         }),
       });
       await load();
+      notifyItemsUpdated();
     } catch (error) {
       alert(error.message || "Could not save notes.");
     } finally {
       setSavingNoteId(null);
+    }
+  };
+
+  const handleTogglePurchased = async (item, checked) => {
+    const itemId = item?.item_id;
+    if (!itemId) return;
+    setTogglingPurchasedId(itemId);
+    try {
+      const purchasePrice = checked ? Number(item.current_price || 0) : null;
+      await apiRequest(`/api/cart-items/${itemId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          purchased: !!checked,
+          purchase_price: checked ? (Number.isFinite(purchasePrice) ? purchasePrice : null) : null,
+        }),
+      });
+      await load();
+      notifyItemsUpdated();
+    } catch (error) {
+      alert(error.message || "Could not update purchase status.");
+    } finally {
+      setTogglingPurchasedId(null);
     }
   };
 
@@ -328,6 +360,19 @@ const Cart = () => {
                       ? purchasedPriceLabel(item)
                       : formatMoney(item.current_price)}
                   </p>
+                  <label
+                    className="mt-1 flex items-center gap-2 text-xs text-slate-700"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!!item.is_purchased}
+                      disabled={togglingPurchasedId === item.item_id}
+                      onChange={(e) => handleTogglePurchased(item, e.target.checked)}
+                    />
+                    {togglingPurchasedId === item.item_id ? "Updating…" : "Purchased"}
+                  </label>
                   <textarea
                     rows={2}
                     className="mt-2 w-full rounded border border-gray-300 px-2 py-1 text-xs"

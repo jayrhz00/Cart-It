@@ -51,6 +51,16 @@ const SpendingAnalytics = () => {
     load().catch((e) => console.error(e));
   }, [load]);
 
+  useEffect(() => {
+    const onUpdated = () => load().catch((e) => console.error(e));
+    window.addEventListener("cartit:items-updated", onUpdated);
+    window.addEventListener("focus", onUpdated);
+    return () => {
+      window.removeEventListener("cartit:items-updated", onUpdated);
+      window.removeEventListener("focus", onUpdated);
+    };
+  }, [load]);
+
   const purchaseDate = (item) => item.purchase_date || item.created_at;
 
   const purchasedInView = useMemo(() => {

@@ -151,6 +151,8 @@ const PRICE_CHECK_DISABLED =
 const PRICE_CHECK_INTERVAL_MINUTES = PRICE_CHECK_DISABLED
   ? 0
   : Number(process.env.PRICE_CHECK_INTERVAL_MINUTES || 180);
+/** Same value must be sent as header `X-Cart-It-Cron-Secret` when calling POST /api/internal/run-price-check (Render Cron, etc.). */
+const PRICE_CHECK_CRON_SECRET = String(process.env.PRICE_CHECK_CRON_SECRET || "").trim();
 const RESET_PASSWORD_EXP_MINUTES = Math.max(
   5,
   Number(process.env.RESET_PASSWORD_EXP_MINUTES || 30)
@@ -251,7 +253,7 @@ function parsePositivePrice(raw: unknown): number | null {
 }
 
 function getFrontendBaseUrl(): string {
-  const raw = String(process.env.FRONTEND_URL || "https://cart-it.pages.dev").trim();
+  const raw = String(process.env.FRONTEND_URL || "https://cart-it.com").trim();
   return raw.replace(/\/+$/, "");
 }
 
@@ -641,6 +643,17 @@ function extractPriceFromHtml(html: string): number | null {
     }
   }
 
+  // Amazon: prefer prices inside core price display blocks (avoids "$35 free shipping" thresholds).
+  const coreIdx = html.search(/corePriceDisplay_(desktop|mobile)_feature_div|corePrice_feature_div/i);
+  if (coreIdx >= 0) {
+    const slice = html.slice(coreIdx, Math.min(html.length, coreIdx + 6000));
+    const m = slice.match(/class=["'][^"']*a-offscreen[^"']*["'][^>]*>\s*\$?\s*([0-9][0-9,]*\.[0-9]{2})\s*</i);
+    if (m?.[1]) {
+      const parsed = parsePositivePrice(m[1]);
+      if (parsed != null) return parsed;
+    }
+  }
+
   const jsonLdBlocks = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
   for (const block of jsonLdBlocks) {
     const content = block
@@ -786,9 +799,108 @@ function extractStockFromHtml(html: string): boolean | null {
   return null;
 }
 
-async function fetchProductSnapshotFromUrl(
-  url: string
-): Promise<{ price: number | null; inStock: boolean | null }> {
+/** Hostnames where a plain server-side fetch often returns bot walls or HTML without og:image (images then fail in the app). */
+function isAmazonProductUrl(url: string): boolean {
+  try {
+    const h = new URL(url).hostname.replace(/^www\./, "");
+    return h === "amazon.com" || h.endsWith(".amazon.com");
+  } catch {
+    return false;
+  }
+}
+
+function normalizeProductImageUrl(raw: string, pageUrl: string): string | null {
+  const s = String(raw || "").trim();
+  if (!s || s.startsWith("data:")) return null;
+  try {
+    return new URL(s, pageUrl).href;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Best-effort main product image from public PDP HTML (same signals as browsers use for previews).
+ * Used when the extension omits image_url or Amazon serves empty og:image to scripted fetches.
+ */
+function extractProductImageFromHtml(html: string, pageUrl: string): string | null {
+  const ogMatch =
+    html.match(/<meta[^>]+property=["']og:image["'][^>]*content=["']([^"']+)["']/i) ||
+    html.match(/<meta[^>]+content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
+  if (ogMatch?.[1]) {
+    const u = normalizeProductImageUrl(ogMatch[1], pageUrl);
+    if (u) return u;
+  }
+  const twMatch = html.match(/<meta[^>]+name=["']twitter:image(?::src)?["'][^>]*content=["']([^"']+)["']/i);
+  if (twMatch?.[1]) {
+    const u = normalizeProductImageUrl(twMatch[1], pageUrl);
+    if (u) return u;
+  }
+  const landingMatch = html.match(/id=["']landingImage["'][^>]*src=["']([^"']+)["']/i);
+  if (landingMatch?.[1]) {
+    const u = normalizeProductImageUrl(landingMatch[1], pageUrl);
+    if (u) return u;
+  }
+  const dynMatch = html.match(/data-a-dynamic-image=["']([^"']+)["']/i);
+  if (dynMatch?.[1]) {
+    try {
+      const jsonish = dynMatch[1].replace(/&quot;/g, '"').replace(/&#34;/g, '"');
+      const obj = JSON.parse(jsonish) as Record<string, unknown>;
+      const first = Object.keys(obj)[0];
+      if (first && /^https?:\/\//i.test(first)) return first;
+    } catch {
+      /* ignore */
+    }
+  }
+  return null;
+}
+
+function scrapingBeeConfigured(): boolean {
+  if (String(process.env.SCRAPINGBEE_ENABLED || "").toLowerCase().trim() === "false") {
+    return false;
+  }
+  return Boolean(String(process.env.SCRAPINGBEE_API_KEY || "").trim());
+}
+
+async function fetchHtmlViaScrapingBee(url: string): Promise<string | null> {
+  if (!scrapingBeeConfigured()) return null;
+  const apiKey = String(process.env.SCRAPINGBEE_API_KEY || "").trim();
+  const params = new URLSearchParams({
+    api_key: apiKey,
+    url,
+    render_js: "false",
+  });
+  if (String(process.env.SCRAPINGBEE_PREMIUM_PROXY || "").trim() === "1") {
+    params.set("premium_proxy", "true");
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25000);
+  try {
+    const res = await fetch(`https://app.scrapingbee.com/api/v1?${params.toString()}`, {
+      method: "GET",
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    const text = await res.text();
+    return text.length > 200 ? text : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * HTML for a product URL: direct fetch first, then ScrapingBee when configured (required for many Amazon PDPs).
+ * ScrapingBee: set SCRAPINGBEE_API_KEY in `.env` (see `.env.example`).
+ */
+async function fetchHtmlForProductUrl(url: string): Promise<string | null> {
+  const useBee = scrapingBeeConfigured();
+  if (useBee && isAmazonProductUrl(url)) {
+    const viaBee = await fetchHtmlViaScrapingBee(url);
+    if (viaBee) return viaBee;
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12000);
   try {
@@ -801,17 +913,42 @@ async function fetchProductSnapshotFromUrl(
       },
       signal: controller.signal,
     });
-    if (!res.ok) return { price: null, inStock: null };
-    const html = await res.text();
-    return {
-      price: extractPriceFromHtml(html),
-      inStock: extractStockFromHtml(html),
-    };
+    if (res.ok) {
+      let html = await res.text();
+      if (useBee && extractPriceFromHtml(html) == null) {
+        const viaBee = await fetchHtmlViaScrapingBee(url);
+        if (viaBee) html = viaBee;
+      } else if (
+        useBee &&
+        isAmazonProductUrl(url) &&
+        !extractProductImageFromHtml(html, url)
+      ) {
+        const viaBee = await fetchHtmlViaScrapingBee(url);
+        if (viaBee) html = viaBee;
+      }
+      return html;
+    }
   } catch {
-    return { price: null, inStock: null };
+    /* fall through */
   } finally {
     clearTimeout(timeout);
   }
+
+  if (useBee) {
+    return fetchHtmlViaScrapingBee(url);
+  }
+  return null;
+}
+
+async function fetchProductSnapshotFromUrl(
+  url: string
+): Promise<{ price: number | null; inStock: boolean | null }> {
+  const html = await fetchHtmlForProductUrl(url);
+  if (!html) return { price: null, inStock: null };
+  return {
+    price: extractPriceFromHtml(html),
+    inStock: extractStockFromHtml(html),
+  };
 }
 
 async function runPriceCheckCycle(): Promise<void> {
@@ -1011,6 +1148,31 @@ app.get("/test-db", async (_req: Request, res: Response) => {
   } catch (error) {
     console.error("Database test route failed:", error);
     res.status(500).json({ message: "Database test failed" });
+  }
+});
+
+/**
+ * POST /api/internal/run-price-check — run one price/stock pass (same logic as the in-process timer).
+ * Secured with PRICE_CHECK_CRON_SECRET (header `X-Cart-It-Cron-Secret`). Use from Render Cron or Uptime
+ * when the web service sleeps and setInterval is not enough.
+ */
+app.post("/api/internal/run-price-check", async (req: Request, res: Response) => {
+  if (!PRICE_CHECK_CRON_SECRET) {
+    return res.status(503).json({
+      message:
+        "Cron hook not configured. Set PRICE_CHECK_CRON_SECRET on the server and call again with matching header X-Cart-It-Cron-Secret.",
+    });
+  }
+  const sent = String(req.headers["x-cart-it-cron-secret"] || "").trim();
+  if (sent !== PRICE_CHECK_CRON_SECRET) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  try {
+    await runPriceCheckCycle();
+    return res.status(200).json({ ok: true, ranAt: new Date().toISOString() });
+  } catch (error) {
+    console.error("Cron price check failed:", error);
+    return res.status(500).json({ message: "Price check run failed" });
   }
 });
 
@@ -2365,11 +2527,22 @@ app.post(
     message: "Missing required field: item_name",
   });
 }
+    // Reuse one HTML fetch for both price backfill and image extraction when needed.
+    let cachedProductHtml: string | null | undefined;
+    const loadProductHtml = async (): Promise<string | null> => {
+      if (cachedProductHtml !== undefined) return cachedProductHtml;
+      cachedProductHtml = await fetchHtmlForProductUrl(productUrl);
+      return cachedProductHtml;
+    };
+
     // If the extension sent 0 or omitted price, try one server-side fetch (same HTML parser as the background job).
     if (!Number.isFinite(priceNum) || priceNum <= 0) {
-      const snapshot = await fetchProductSnapshotFromUrl(productUrl);
-      if (snapshot.price != null && snapshot.price > 0) {
-        priceNum = snapshot.price;
+      const html = await loadProductHtml();
+      if (html) {
+        const fromPage = extractPriceFromHtml(html);
+        if (fromPage != null && fromPage > 0) {
+          priceNum = fromPage;
+        }
       }
     }
     if (!Number.isFinite(priceNum) || priceNum <= 0) {
@@ -2412,6 +2585,16 @@ app.post(
       resolvedGroupId = gid;
     }
 
+    let resolvedImage: string | null =
+      typeof image_url === "string" && image_url.trim() !== "" ? image_url.trim() : null;
+    if (!resolvedImage && productUrl) {
+      const html = await loadProductHtml();
+      if (html) {
+        const extracted = extractProductImageFromHtml(html, productUrl);
+        if (extracted) resolvedImage = extracted;
+      }
+    }
+
     // Persist item row first (cart_items is the source of truth shown in UI cards).
     const itemResult = await pool.query(
       `
@@ -2425,7 +2608,7 @@ app.post(
         resolvedGroupId,
         itemName,
         productUrl,
-        image_url ?? null,
+        resolvedImage,
         store ?? null,
         priceNum,
         is_in_stock === false ? false : true,
@@ -2941,23 +3124,23 @@ app.get("/api/cart-items/:id/notes", authenticateToken, async (req: AuthRequest<
   }
 });
 
-app.patch(
-  "/api/cart-items/:id/notes",
-  authenticateToken,
-  async (req: AuthRequest<{ notes: string | null }, { id: string }>, res: Response) => {
+app.patch( // Defines route that listens for PATCH requests at /api/cart-items/:id/notes
+  "/api/cart-items/:id/notes", // PATCH = HTTP method for only changing the notes field, ID =  URL parameter. If the request comes in as /api/cart-items/42/notes, then req.params.id = "42" 
+  authenticateToken, // middleware that runs before your handler. It verifies the JWT token, and if it's invalid, the request never reaches your code. If it's valid, it attaches req.user so you know who's making the request
+  async (req: AuthRequest<{ notes: string | null }, { id: string }>, res: Response) => { // Tells typescript the body has a notes field, URL params have ID field
     try {
-      const item_id = Number(req.params.id);
-      const owner_id = req.user!.userId;
-      const { notes } = req.body;
+      const item_id = Number(req.params.id); // Converts the URL :id from a string into a number
+      const owner_id = req.user!.userId; // Grabs the authenticated user's ID from req.user which was placed by authenticate token
+      const { notes } = req.body; // Pulls the notes field out of the JSON request body using destructuring
 
-      if (isNaN(item_id)) {
+      if (isNaN(item_id)) { // If someone sent /api/cart-items/abc/notes, Number("abc") is NaN. Reject with a 400 (Bad Request) before touching the database
         return res.status(400).json({ message: "Invalid item ID" });
       }
-      if (notes !== null && typeof notes !== "string") {
+      if (notes !== null && typeof notes !== "string") { // notes must be either null (clearing the note) or a string (setting/updating it). Anything else (number, object, array) gets rejected
         return res.status(400).json({ message: "notes must be a string or null" });
       }
 
-      const ownerCheck = await pool.query(
+      const ownerCheck = await pool.query( //Looks up the item in the database to find out who owns it and which group it belongs to
         `
         SELECT user_id, group_id
         FROM cart_items
@@ -2966,7 +3149,7 @@ app.patch(
         [item_id]
       );
 
-      if (ownerCheck.rows.length === 0) {
+      if (ownerCheck.rows.length === 0) { // If no row cam back then item doesnt exist 
         return res.status(404).json({ message: "Item not found" });
       }
 
@@ -2977,52 +3160,68 @@ app.patch(
       if (!canEditNotes) {
         return res.status(403).json({ message: "You cannot update notes for this item" });
       }
-
-      await upsertPrivateNoteForItem(item_id, owner_id, notes);
-
+      // Helper function
+      await upsertPrivateNoteForItem(item_id, owner_id, notes); // Updates or creates a new note if it already exists 
+      // Reads the note back from the database right after saving it
       const readBack = await pool.query(
-        `SELECT body AS notes FROM item_private_notes WHERE item_id = $1 AND user_id = $2`,
-        [item_id, owner_id]
+        `SELECT body AS notes FROM item_private_notes WHERE item_id = $1 AND user_id = $2`, // Grabs body column but renames to notes
+        [item_id, owner_id] // Filters note to user it belongs to, $1 & &2 are placeholders for item_id and owner_id from the array
       );
-
+      // Sends JSON response to frontend as a confirmation message 
       return res.status(200).json({
         message: "Item notes updated successfully",
         item: {
           item_id,
-          notes: readBack.rows[0]?.notes ?? null,
-        },
+          notes: readBack.rows[0]?.notes ?? null, // If a row doesn't exist just give undefined or null
+        }, // Basically asks to give the saved note text or null if nothing was found 
       });
     } catch (error) {
       console.error("Update item notes failed:", error);
-      return res.status(500).json({ message: "Failed to update item notes" });
-    }
+      return res.status(500).json({ message: "Failed to update item notes" }); // (400 = bad request , 500 = server error)
+    } // private-notes update route, WHERE user_id = $2 clause guarantees a user can only retrieve their own private note
   }
 );
 
-// Startup function for Cart-It
-// 1) Sets up db
-// 2) Starts HTTP server so extension can make API calls
+// Entry point for cart-it backend. (EX: npm start)
+// 1) Prepares the database so all your tables are guaranteed to exist
+// 2) Starts (Express) HTTP server so extension can make API calls (/api/login, /api/register, /api/cart...)
 // 3) Starts a background price/stock checker that runs on a timer to update prices
 async function startServer() 
 {
   try {
     await initializeDatabase(); // Await helps the server not accept requests before tables exist
-
+    // If this were to change first few API requests would say table doesn't exist b/c the server starts before the tables exist 
     app.listen(PORT, "0.0.0.0", () => { // Accepts connections from anywhere 
       console.log(`Server running on http://0.0.0.0:${PORT}`);
     });
 
-    if (PRICE_CHECK_DISABLED) { //Check an environment variable to decide if the background price checker should run
+    if (scrapingBeeConfigured()) {
+      console.log("ScrapingBee: HTML fallback enabled (product saves + price-check job).");
+    }
+
+    if (PRICE_CHECK_DISABLED) {
       console.log(
-        "Price checker: disabled (set PRICE_CHECK_ENABLED=true to enable, or set PRICE_CHECK_INTERVAL_MINUTES to a positive number)."
+        "Price checker: disabled (remove PRICE_CHECK_ENABLED=false and PRICE_CHECK_INTERVAL_MINUTES=0 to enable)."
       );
     } else {
-    const intervalMs = Math.max(5, PRICE_CHECK_INTERVAL_MINUTES) * 60 * 1000; //Enforces a minimum of 5 minutes 
+    const intervalMs = Math.max(5, PRICE_CHECK_INTERVAL_MINUTES) * 60 * 1000; //Enforces a minimum of 5 minutes. Javascript timers use milliseconds
     console.log(`Price checker enabled: every ${Math.max(5, PRICE_CHECK_INTERVAL_MINUTES)} minute(s)`);
-    setTimeout(() => {  // Runs the first price check 15 seconds after startup
+    const resendKey = String(process.env.RESEND_API_KEY || "").trim();
+    const resendFrom = String(process.env.RESEND_FROM_EMAIL || "").trim();
+    if (!resendKey || !resendFrom) {
+      console.warn(
+        "Email alerts: price-drop and out-of-stock emails need RESEND_API_KEY + RESEND_FROM_EMAIL (in-app notifications still work)."
+      );
+    }
+    if (!PRICE_CHECK_CRON_SECRET) {
+      console.warn(
+        "Cron hook: optional POST /api/internal/run-price-check is disabled until PRICE_CHECK_CRON_SECRET is set (for Render Cron / external scheduler)."
+      );
+    }
+    setTimeout(() => {
       runPriceCheckCycle().catch(() => {});
     }, 15000);
-    setInterval(() => { // Runs it repeatedly on selected interval
+    setInterval(() => {
       runPriceCheckCycle().catch(() => {});
     }, intervalMs);
     }
@@ -3032,5 +3231,5 @@ async function startServer()
   }
 }
 
-startServer();
+startServer(); // Calls the function
 

@@ -43,6 +43,41 @@ function getPageData() {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
   };
 
+  const isAmazon = /\.amazon\./i.test(location.hostname);
+  const getAmazonPrice = () => {
+    // Prefer explicit price blocks / a-offscreen values used for the primary PDP price.
+    const selectors = [
+      "#corePriceDisplay_desktop_feature_div .a-price .a-offscreen",
+      "#corePriceDisplay_mobile_feature_div .a-price .a-offscreen",
+      "#corePrice_feature_div .a-price .a-offscreen",
+      "#price_inside_buybox",
+      "#priceblock_ourprice",
+      "#priceblock_dealprice",
+      "#priceblock_saleprice",
+      'span[data-a-color="price"] .a-offscreen',
+      ".a-price.aok-align-center .a-offscreen",
+      ".a-price .a-offscreen",
+    ];
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      const txt = el?.textContent || el?.getAttribute?.("content") || "";
+      const parsed = parsePriceText(txt);
+      // Avoid common Amazon non-price numbers (e.g. $35 shipping threshold) by requiring cents.
+      if (parsed != null && /\.\d{2}\b/.test(String(txt))) return parsed;
+    }
+    // Fallback: scan the core price block text only (not the whole page).
+    const core =
+      document.querySelector("#corePriceDisplay_desktop_feature_div") ||
+      document.querySelector("#corePriceDisplay_mobile_feature_div") ||
+      document.querySelector("#corePrice_feature_div");
+    if (core) {
+      const m = (core.innerText || "").match(/\$\s*([0-9][0-9,]*\.[0-9]{2})/);
+      const parsed = parsePriceText(m?.[1]);
+      if (parsed != null) return parsed;
+    }
+    return null;
+  };
+
   /**
    * Variant PDPs often put a stale or "from" price in meta / JSON-LD while the real
    * price for the selected size sits next to Add to cart (including fixed bottom bars).
@@ -101,6 +136,10 @@ function getPageData() {
   };
 
   let price = null;
+  if (isAmazon) {
+    const amazonPrice = getAmazonPrice();
+    if (amazonPrice != null) price = amazonPrice;
+  }
   const parseJsonPrice = (obj) => {
     if (!obj || typeof obj !== "object") return null;
     const candidates = [
@@ -198,7 +237,9 @@ function getPageData() {
       }
     }
   }
-  if (price == null) {
+  // IMPORTANT: Avoid scanning Amazon body text for "$..." because it contains shipping thresholds
+  // like "FREE shipping over $35" which are not product prices.
+  if (price == null && !isAmazon) {
     const bodyText = (document.body?.innerText || "").slice(0, 12000);
     const fallbackRegexes = [
       /(?:\$|USD\s?)([0-9]+(?:\.[0-9]{1,2})?)/i,
@@ -217,10 +258,11 @@ function getPageData() {
   }
 
   const nearCartPrice = priceNearPrimaryAddToCart();
+  // On Amazon, the "near Add to cart" scan can grab "$35" free-shipping thresholds.
+  // Only use it when we still don't have a price.
   if (nearCartPrice != null) {
-    if (price == null || Math.abs(nearCartPrice - price) >= 0.5) {
-      price = nearCartPrice;
-    }
+    if (price == null) price = nearCartPrice;
+    else if (!isAmazon && Math.abs(nearCartPrice - price) >= 0.5) price = nearCartPrice;
   }
 
   const detectInStock = () => {
@@ -242,10 +284,35 @@ function getPageData() {
     return true;
   };
   const host = location.hostname.replace(/^www\./, "");
+  let imageUrl = ogImage || "";
+  if (!imageUrl.trim() && /\.amazon\./i.test(location.hostname)) {
+    const landing = document.querySelector("#landingImage");
+    const fromLanding =
+      landing?.getAttribute("src") ||
+      landing?.getAttribute("data-old-hires") ||
+      landing?.currentSrc ||
+      "";
+    if (fromLanding) imageUrl = fromLanding;
+    if (!imageUrl) {
+      const wrapImg = document.querySelector(
+        "#imgTagWrapperId img[data-a-dynamic-image], #main-image-container img[data-a-dynamic-image]"
+      );
+      const dyn = wrapImg?.getAttribute("data-a-dynamic-image");
+      if (dyn) {
+        try {
+          const map = JSON.parse(dyn.replace(/&quot;/g, '"'));
+          const first = Object.keys(map)[0];
+          if (first && /^https?:\/\//i.test(first)) imageUrl = first;
+        } catch (_) {
+          /* ignore */
+        }
+      }
+    }
+  }
   return {
     item_name: document.title || "Untitled page",
     product_url: location.href,
-    image_url: ogImage || "",
+    image_url: imageUrl,
     store: host,
     current_price: price != null && !Number.isNaN(price) ? price : 0,
     is_in_stock: detectInStock(),
@@ -266,7 +333,7 @@ async function getWebAppOrigin() {
   const fallback =
     typeof CART_IT_CONFIG !== "undefined" && CART_IT_CONFIG.defaultWebAppOrigin
       ? CART_IT_CONFIG.defaultWebAppOrigin
-      : "https://cart-it.pages.dev";
+      : "https://cart-it.com";
   const { webAppOrigin: stored } = await chrome.storage.local.get(["webAppOrigin"]);
   const raw = String(stored || fallback).trim().replace(/\/$/, "");
   return raw || fallback.replace(/\/$/, "");
@@ -332,6 +399,9 @@ function isCartItHost(hostname) {
   const fn = globalThis.CART_IT_CONFIG?.isWebAppHost;
   if (typeof fn === "function") return fn(hostname);
   return (
+    hostname === "cart-it.com" ||
+    hostname === "www.cart-it.com" ||
+    hostname.endsWith(".cart-it.com") ||
     hostname === "cart-it.pages.dev" ||
     hostname.endsWith(".cart-it.pages.dev") ||
     hostname === "localhost" ||
@@ -762,7 +832,7 @@ async function init() {
   const defaultWeb =
     typeof CART_IT_CONFIG !== "undefined" && CART_IT_CONFIG.defaultWebAppOrigin
       ? CART_IT_CONFIG.defaultWebAppOrigin
-      : "https://cart-it.pages.dev";
+      : "https://cart-it.com";
   const webAppEl = document.getElementById("webAppOrigin");
   const resolvedWeb = (storedWeb || defaultWeb).trim().replace(/\/$/, "");
   await chrome.storage.local.set({ webAppOrigin: resolvedWeb });

@@ -124,7 +124,8 @@
         <div class="pill">Fastest path</div>
         <h1>Install Cart-It</h1>
         <p class="lead">
-          Published extensions install in <strong>one click</strong> from the store. Until then, use the zip below — two short steps after download.
+          Published extensions install in <strong>one click</strong> from each store (Chrome, Edge, Firefox). Paste your live listing URLs into <code>STORE_URLS</code> in this file — for Firefox, use your
+          <a href="https://addons.mozilla.org/developers/" style="color: #fed7aa" target="_blank" rel="noopener noreferrer">AMO</a> add-on page URL. Until then, use the zip below.
         </p>
 
         <div class="btn-row" id="storeRow" hidden>
@@ -189,7 +190,7 @@
       const STORE_URLS = {
         chrome: "",
         edge: "",
-        /** Paste your AMO listing, e.g. https://addons.mozilla.org/en-US/firefox/addon/cart-it/ */
+        /** Your approved listing: AMO → Manage listing → copy public URL (one-click “Add to Firefox” for users). */
         firefox: "",
       };
 

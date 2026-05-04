@@ -28,6 +28,9 @@ function isCartItHost(hostname) {
   const fn = globalThis.CART_IT_CONFIG?.isWebAppHost;
   if (typeof fn === "function") return fn(hostname);
   return (
+    hostname === "cart-it.com" ||
+    hostname === "www.cart-it.com" ||
+    hostname.endsWith(".cart-it.com") ||
     hostname === "cart-it.pages.dev" ||
     hostname.endsWith(".cart-it.pages.dev") ||
     hostname === "localhost" ||
@@ -36,7 +39,7 @@ function isCartItHost(hostname) {
 }
 
 /**
- * Pull JWT from any open cart-It tab (pages.dev / localhost / 127.0.0.1).
+ * Pull JWT from any open cart-It tab (cart-it.com, pages.dev, localhost / 127.0.0.1).
  * The side panel often runs on a shop tab, so the content script there never runs —
  * this keeps chrome.storage.local.jwt in sync with the site you logged into.
  */

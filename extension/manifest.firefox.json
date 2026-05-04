@@ -36,6 +36,9 @@
   "content_scripts": [
     {
       "matches": [
+        "https://cart-it.com/*",
+        "https://www.cart-it.com/*",
+        "https://*.cart-it.com/*",
         "https://cart-it.pages.dev/*",
         "https://*.cart-it.pages.dev/*",
         "http://localhost/*",
