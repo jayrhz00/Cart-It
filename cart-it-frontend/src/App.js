@@ -7,12 +7,14 @@ import Dashboard from './components/dashboard';
 import Wishlist from './components/wishlist';
 import Cart from './components/cart';
 import SpendingAnalytics from './components/analytics';
+import PrivacyPolicy from './components/privacy-policy';
 
 function App() {
   return (
     <Router>
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/dashboard" element={<Dashboard />} />

@@ -76,6 +76,11 @@ const LandingPage = () => {
               Download Cart-It Extension
             </button>
           </div>
+          <p className="mt-10 text-center text-sm text-slate-500">
+            <Link to="/privacy" className="font-semibold text-orange-700 underline decoration-orange-200 underline-offset-2 hover:text-orange-900">
+              Privacy Policy
+            </Link>
+          </p>
         </div>
       </section>
     </div>
