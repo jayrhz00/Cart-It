@@ -1,154 +1,183 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './sidebar';
-import { LuCirclePlus } from "react-icons/lu";
+import { LuPlus, LuUsers, LuTrendingUp, LuShoppingCart } from "react-icons/lu";
+import { getWishlists, getCartItems, createWishlist } from '../services/api';
 import '../styles/dashboard.css';
 
-/* Serves as the main landing screen for authenticated users.
- * Features navigation, wishlists, analytics, and cart management.
+/**
+ * Dashboard Component
+ * The primary landing page for authenticated users.
+ * Features a quad-image wishlist preview and a branded "New List" trigger.
+ * Also features at-a-glance look at recent cart items and sparkline graph for spending analytics.
  */
 
 const Dashboard = () => {
-  const navigate = useNavigate();  // Navigation hook for redirecting
-  const [user, setUser] = useState(null);  // State for user information
-  const [wishlists, setWishlists] = useState([]);  // State for wishlists - initialized as empty array 
-  const [isModalOpen, setIsModalOpen] = useState(false);   // State for modals (creating new wishlist)
-  const [newWishlistName, setNewWishlistName] = useState("");  // State for new wishlist name input
-  const [items, setItems] = useState([]);  // State for recent cart items - initialized as empty array
+  const navigate = useNavigate();
+  const [user, setUser] = useState(null); // Current authenticated user
+  const [wishlists, setWishlists] = useState([]); // List of owned and shared collections
+  const [isModalOpen, setIsModalOpen] = useState(false); // Toggle for creation modal
+  const [newWishlistName, setNewWishlistName] = useState(""); // Input for new list naming
+  const [items, setItems] = useState([]); // Recent items for activity feed
 
-  // On component mount, check for user authentication
+  // Effect hook to verify authentication and fetch aggregate dashboard data. Redirects to login if session data is missing.
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
-    // Redirect to login if no user is found in local storage
     if (!savedUser) {
       navigate('/login');
     } else {
-      const user = JSON.parse(savedUser);
-      setUser(user);
-        // Fetch wishlists from database
-        fetch(`http://localhost:3000/api/wishlists?owner_id=${user.user_id}`)
-            .then(res => res.json())
-            .then(data => setWishlists(data))
-            .catch(err => console.error("Error fetching wishlists:", err));
+      const userData = JSON.parse(savedUser);
+      setUser(userData);
 
-        // Fetch recent cart items 
-        fetch(`http://localhost:3000/api/items?user_id=${user.user_id}`)
-            .then(res => res.json())
-            .then(data => setItems(data))
-            .catch(err => console.error("Error fetching items:", err));
+      const loadDashboardData = async () => {
+        try {
+          const [wishlistData, cartData] = await Promise.all([
+            getWishlists(userData.user_id),
+            getCartItems(userData.user_id)
+          ]);
+          setWishlists(wishlistData);
+          setItems(cartData);
+        } catch (err) {
+          console.error("Dashboard load error:", err);
+        }
+      };
+      loadDashboardData();
     }
   }, [navigate]);
 
-  // Opens the create wishlist modal
+  // Submits a new wishlist request to the API and updates local state.
   const handleSaveWishlist = async () => {
     if (newWishlistName.trim()) {
-      // Get current user info from local storage to associate wishlist with user ID
-      const user = JSON.parse(localStorage.getItem('user'));
-
-      // Send new wishlist data to backend API
       try {
-        const response = await fetch('http://localhost:3000/api/wishlists', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-          owner_id: user.user_id, 
-          name: newWishlistName 
-        }),
-      });
-        if (response.ok) {
-          const newWishlist = await response.json();
-          setWishlists([...wishlists, newWishlist]);
-          setNewWishlistName("");
-          setIsModalOpen(false);
-        }
+        const newWishlist = await createWishlist(user.user_id, newWishlistName);
+        setWishlists([...wishlists, newWishlist]);
+        setNewWishlistName("");
+        setIsModalOpen(false);
       } catch (error) {
         console.error("Error creating wishlist:", error);
-        alert("Server error. Please try again later.");
       }
     }
   };
 
   return (
     <div className="dashboard-container">
-      {/* Sidebar */}
-      <Sidebar wishlists={wishlists} showExtension={true} />        
-      
-      {/* Main Content Area */}
-      <main className="dash-main">
-        {/* Dynamic greeting: prevents crash if user is still loading */}
-        <h1 className="dash-title">Hello, {user ? user.username : 'User'}</h1>
+      {/* Sidebar Container */}
+      <div className="sidebar-container">
+        <Sidebar wishlists={wishlists} showExtension={true} />
+      </div>
 
-        {/* Wishlists Section */}
-        <section className="wishlist-section">
-          <h2 className="dash-wishlist-title">My Wishlists</h2>
+      <main className="dash-main">
+        {/* Welcome Header */}
+        <header className="dash-header">
+          <div className="dash-greeting">
+            <h1 className="dash-title">Welcome back, {user ? user.username : 'User'}</h1>
+            <p className="dash-subtitle">Your personal shopping lab is ready.</p>
+          </div>
+        </header>
+
+        {/* Collection Grid: Contains the creation trigger and wishlist quads */}
+        <section className="dash-section">
+          <h2 className="section-heading">My Collections</h2>
+
           <div className="wishlist-grid">
-            
-            {/* Trigger Modal */}
-            <button onClick={() => setIsModalOpen(true)} className="create-wishlist-btn">
-              <LuCirclePlus className="text-5xl" />
-              <span className="create-wishlist-label">Create New Wishlist</span>
+            {/* Branded "Create New" Card Trigger */}
+            <button onClick={() => setIsModalOpen(true)} className="create-list-card">
+              <div className="plus-icon-circle">
+                <LuPlus size={32} />
+              </div>
+              <span className="create-label">New List</span>
             </button>
 
-            {/* Display wishlists or a placeholder if none exist */}
-            {wishlists.length > 0 ? (
-              wishlists.map((list) => (
-                <div key={list.id} className="wishlist-card">
-                  <div className="wishlist-img-placeholder"></div>
-                  <div className="wishlist-card-footer">
-                    <span className="wishlist-card-name">{list.name}</span>
-                    <span className="wishlist-item-count">{list.items} items</span>
-                  </div>
+            {wishlists.map((list) => (
+              <div
+                key={list.wishlist_id}
+                className="dash-wishlist-card"
+                onClick={() => navigate(`/wishlist/${list.wishlist_id}`)}
+              >
+                {/* Quad-Image Preview: Displays first 4 items or placeholders */}
+                <div className="wishlist-quad">
+                  {list.preview_images && list.preview_images.length > 0 ? (
+                    <div className="quad-grid">
+                      {list.preview_images.map((img, i) => (
+                        <img key={i} src={img} alt="" className="quad-img" />
+                      ))}
+                      {/* Generates empty blocks if list contains fewer than 4 items */}
+                      {[...Array(Math.max(0, 4 - list.preview_images.length))].map((_, i) => (
+                        <div key={`empty-${i}`} className="quad-empty"></div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="quad-placeholder">
+                      <LuShoppingCart size={24} className="text-gray-300" />
+                    </div>
+                  )}
                 </div>
-              ))
-            ) : (
-              <div className="empty-state">
-                No wishlists yet ... start shopping!
+
+                {/* Wishlist Metadata Section */}
+                <div className="wishlist-info">
+                  <div className="flex justify-between items-start">
+                    <span className="list-name">{list.name}</span>
+                    {/* Collaborative status icon (LuUsers) shown for shared lists */}
+                    {list.is_shared && (
+                      <LuUsers size={16} className="text-[#4B0082] mt-1" title="Shared Wishlist" />
+                    )}
+                  </div>
+                  <span className="list-count">{list.items} items</span>
+                </div>
               </div>
-            )}
-            </div>
+            ))}
+          </div>
         </section>
 
-        {/* Analytics and Recent Items Section */}
-        <section className="info-grid">
-          <div className="dashboard-card">
-            <h2 className="card-header">Spending Analytics</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="box-placeholder"></div>
-              <div className="box-placeholder"></div>
-              <div className="box-placeholder"></div>
-              <div className="box-placeholder"></div>
+        {/* Insight Section: Summarized Analytics and Recent Activity */}
+        <section className="insights-grid">
+          {/* Sparkline visualization linked to full Analytics suite */}
+          <div className="insight-card" onClick={() => navigate('/analytics')}>
+            <div className="card-top">
+              <div className="flex items-center gap-2">
+                <LuTrendingUp className="text-[#DB8046]" />
+                <h3 className="insight-label">Expense Trends</h3>
+              </div>
+            </div>
+            <div className="mini-graph">
+              <div className="spark-bar h-8"></div>
+              <div className="spark-bar h-16"></div>
+              <div className="spark-bar h-12"></div>
+              <div className="spark-bar h-20 active"></div>
             </div>
           </div>
 
-          <div className="dashboard-card">
-            <h2 className="card-header">Recent Cart Items</h2>
-            <div className="cart-grid">
-              {items.map(item => (
-                <div key={item.item_id} className="cart-item-card">
-                  <img src={item.image_url} alt={item.product_name} className="h-20 w-full object-cover rounded" />
-                  <p className="font-bold text-sm truncate">{item.product_name}</p>
-                  <p className="text-sm font-semibold">${item.price}</p>
-                </div>
+          {/* Horizontal strip of latest items found in the main cart */}
+          <div className="insight-card" onClick={() => navigate('/cart')}>
+            <div className="card-top">
+              <div className="flex items-center gap-2">
+                <LuShoppingCart className="text-purple-600" />
+                <h3 className="insight-label">Latest Finds</h3>
+              </div>
+            </div>
+            <div className="recent-strip">
+              {items.slice(0, 5).map(item => (
+                <img key={item.item_id} src={item.image_url} alt="" className="strip-img" />
               ))}
             </div>
           </div>
         </section>
 
-        {/* Custom Modal */}
+        {/* Wishlist Creation Modal */}
         {isModalOpen && (
           <div className="modal-overlay">
             <div className="modal-content">
-              <h3>Create New Wishlist</h3>
-              <input 
-                type="text" 
-                placeholder="Enter wishlist name..."
+              <h3 className="modal-title">Create New Wishlist</h3>
+              <input
+                type="text"
+                placeholder="List Name"
                 value={newWishlistName}
                 onChange={(e) => setNewWishlistName(e.target.value)}
                 autoFocus
               />
               <div className="modal-actions">
-                <button onClick={() => setIsModalOpen(false)} className="cancel-btn">Cancel</button>
-                <button onClick={handleSaveWishlist} className="save-btn">Create</button>
+                <button onClick={() => setIsModalOpen(false)} className="btn-cancel">Cancel</button>
+                <button onClick={handleSaveWishlist} className="btn-save">Create</button>
               </div>
             </div>
           </div>

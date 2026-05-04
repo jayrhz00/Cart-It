@@ -9,7 +9,7 @@
   
   /* Header */
   .landing-header { @apply p-4 border-b border-gray-100; }
-  .logo-img { @apply h-24 w-auto object-contain; } 
+  .logo-img { @apply h-20 w-auto object-contain; } 
 
   /* Hero Section */
   .hero-section { 
@@ -28,7 +28,7 @@
   /* How it Works */
   .section-padding { @apply py-20 px-8 bg-slate-50; }
   .steps-wrapper { @apply max-w-6xl mx-auto; }
-  .section-title { @apply text-2xl font-bold mb-2 text-center; }
+  .landing-section-title { @apply text-2xl font-bold mb-2 text-center; }
   .section-subtitle { @apply text-gray-600 mb-16 text-center; }
   .steps-grid { @apply grid md:grid-cols-3 gap-12 lg:gap-20 text-left; }
   .step-card { @apply space-y-4 p-6 bg-white rounded-2xl shadow-sm border border-slate-100; }
