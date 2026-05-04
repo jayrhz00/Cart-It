@@ -150,6 +150,7 @@ const Cart = () => {
     setSelected({});
     setEditMode(false);
     await load();
+    notifyItemsUpdated();
   };
 
   const handleMoveSelected = async () => {
@@ -175,6 +176,7 @@ const Cart = () => {
       setMoveGroupId("");
       setEditMode(false);
       await load();
+      notifyItemsUpdated();
     } catch (error) {
       alert(error.message || "Could not move selected items.");
     }

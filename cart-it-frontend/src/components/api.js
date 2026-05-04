@@ -1,24 +1,61 @@
-const API_BASE_URL =
+export const API_BASE_URL =
   process.env.REACT_APP_API_URL ||
   (process.env.NODE_ENV === "development"
     ? "http://127.0.0.1:5001"
     : "https://cart-it.onrender.com");
 
+/** Timeout for fetch (ms). Uses AbortSignal.timeout when available. */
+function timeoutSignal(ms) {
+  if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
+    return AbortSignal.timeout(ms);
+  }
+  const c = new AbortController();
+  setTimeout(() => {
+    const e = new Error("Timeout");
+    e.name = "AbortError";
+    c.abort(e);
+  }, ms);
+  return c.signal;
+}
+
 export async function apiRequest(path, options = {}) {
+  const { timeoutMs, signal: outerSignal, ...fetchRest } = options;
   const token = localStorage.getItem("token");
   const headers = {
     "Content-Type": "application/json",
-    ...(options.headers || {}),
+    ...(fetchRest.headers || {}),
   };
 
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let signal = outerSignal;
+  if (timeoutMs != null && timeoutMs > 0 && !outerSignal) {
+    signal = timeoutSignal(timeoutMs);
+  }
+
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...fetchRest,
+      headers,
+      signal,
+    });
+  } catch (err) {
+    const name = err && err.name;
+    const msg = err && err.message;
+    if (
+      timeoutMs &&
+      timeoutMs > 0 &&
+      (name === "AbortError" || msg === "Timeout" || /abort/i.test(String(msg)))
+    ) {
+      throw new Error(
+        `Request timed out after ${Math.round(timeoutMs / 1000)}s. The API may be waking up (free hosting) — wait and try again, or open ${API_BASE_URL}/ in a new tab once to warm the server.`
+      );
+    }
+    throw err;
+  }
 
   let data = null;
   try {

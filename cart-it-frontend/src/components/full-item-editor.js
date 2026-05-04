@@ -54,6 +54,7 @@ export default function FullItemEditor({
   const [busy, setBusy] = useState(false);
   const [threadBusy, setThreadBusy] = useState(false);
   const [copyBusy, setCopyBusy] = useState(false);
+  const [priceRefreshBusy, setPriceRefreshBusy] = useState(false);
   const [privateTargets, setPrivateTargets] = useState([]);
   const [selectedPrivateGroupId, setSelectedPrivateGroupId] = useState("");
   const [msg, setMsg] = useState("");
@@ -171,6 +172,27 @@ export default function FullItemEditor({
     setMsg("Purchase amount updated.");
   };
 
+  const handleRefreshListPrice = async () => {
+    if (!item?.product_url || !String(item.product_url).trim()) {
+      setMsg("No product link on this item.");
+      return;
+    }
+    setPriceRefreshBusy(true);
+    setMsg("");
+    try {
+      await apiRequest(`/api/cart-items/${item.item_id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ refresh_list_price: true }),
+      });
+      await onChanged();
+      setMsg("List price updated from the store page.");
+    } catch (e) {
+      setMsg(e.message || "Could not refresh price.");
+    } finally {
+      setPriceRefreshBusy(false);
+    }
+  };
+
   const copyToPrivateList = async () => {
     setCopyBusy(true);
     setMsg("");
@@ -241,6 +263,19 @@ export default function FullItemEditor({
           {item.store ? <span className="full-item-store">{item.store}</span> : null}
           <div className="full-item-prices">
             <span>List: {money(item.current_price)}</span>
+            {item.product_url && /^https?:\/\//i.test(String(item.product_url)) ? (
+              <button
+                type="button"
+                className="full-item-secondary-btn full-item-refresh-price"
+                disabled={busy || priceRefreshBusy}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleRefreshListPrice();
+                }}
+              >
+                {priceRefreshBusy ? "Refreshing…" : "Refresh price"}
+              </button>
+            ) : null}
             {item.is_in_stock === false ? (
               <span className="full-item-stock-tag">Out of stock</span>
             ) : null}
@@ -274,26 +309,6 @@ export default function FullItemEditor({
 
       {canCopyToPrivate ? (
         <div className="full-item-row full-item-copy-row">
-          <label className="full-item-copy-label" htmlFor={`copy-private-${item.item_id}`}>
-            Choose private wishlist
-          </label>
-          {privateTargets.length > 0 ? (
-            <select
-              id={`copy-private-${item.item_id}`}
-              className="full-item-copy-select"
-              value={selectedPrivateGroupId}
-              disabled={busy || threadBusy || copyBusy}
-              onChange={(e) => setSelectedPrivateGroupId(e.target.value)}
-            >
-              {privateTargets.map((g) => (
-                <option key={g.group_id} value={String(g.group_id)}>
-                  {g.group_name}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <p className="full-item-field-hint">No private wishlist yet — item will copy to private items.</p>
-          )}
           <button
             type="button"
             className="full-item-secondary-btn"

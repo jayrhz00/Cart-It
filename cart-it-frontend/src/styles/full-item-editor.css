@@ -60,6 +60,10 @@
   margin-top: 6px;
   font-size: 0.85rem;
 }
+.full-item-refresh-price {
+  font-size: 0.72rem;
+  padding: 4px 10px;
+}
 .full-item-purchased-tag {
   background: #166534;
   color: #ecfdf5;

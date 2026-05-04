@@ -61,7 +61,8 @@ const SpendingAnalytics = () => {
     };
   }, [load]);
 
-  const purchaseDate = (item) => item.purchase_date || item.created_at;
+  const purchaseDate = (item) =>
+    item.purchase_date || item.updated_at || item.created_at;
 
   const purchasedInView = useMemo(() => {
     return items.filter(

@@ -9,6 +9,7 @@ import {
   LuTrash2,
 } from "react-icons/lu";
 import Sidebar from './sidebar';
+import WishlistListChat from "./wishlist-list-chat";
 import '../styles/wishlist.css';
 import { apiRequest } from './api';
 
@@ -90,6 +91,14 @@ const Wishlist = () => {
     });
   }, [navigate, groupId]);
 
+  const broadcastItemsChanged = useCallback(() => {
+    try {
+      window.dispatchEvent(new Event("cartit:items-updated"));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   useEffect(() => {
     loadAll().catch((e) => console.error(e));
   }, [loadAll]);
@@ -125,19 +134,33 @@ const Wishlist = () => {
     [items]
   );
 
+  /** Sum of what was paid for purchased rows (falls back to list price). */
+  const totalPurchasedValue = useMemo(
+    () =>
+      items
+        .filter((i) => i.is_purchased)
+        .reduce(
+          (s, i) => s + Number(i.purchase_price ?? i.current_price ?? 0),
+          0
+        ),
+    [items]
+  );
+
   const lastUpdated = useMemo(() => {
     const times = items
-      .map((i) => i.created_at)
+      .flatMap((i) => [i.created_at, i.updated_at, i.purchase_date])
       .filter(Boolean)
-      .map((d) => new Date(d).getTime());
+      .map((d) => new Date(d).getTime())
+      .filter((n) => !Number.isNaN(n));
     if (times.length === 0) return "—";
-    return formatRelativeTime(
-      new Date(Math.max(...times)).toISOString()
-    );
+    return formatRelativeTime(new Date(Math.max(...times)).toISOString());
   }, [items]);
 
   const isOwner =
     String(group?.access_role || "").toLowerCase() === "owner";
+
+  const isSharedList =
+    String(group?.visibility || "").toLowerCase() === "shared";
 
   const handleSaveNotes = async (item) => {
     const itemId = item?.item_id;
@@ -160,11 +183,20 @@ const Wishlist = () => {
 
   const handleTogglePurchased = async (item, checked) => {
     try {
+      const purchasePrice = checked ? Number(item.current_price || 0) : null;
       await apiRequest(`/api/cart-items/${item.item_id}`, {
         method: "PATCH",
-        body: JSON.stringify({ purchased: !!checked }),
+        body: JSON.stringify({
+          purchased: !!checked,
+          purchase_price: checked
+            ? Number.isFinite(purchasePrice) && purchasePrice >= 0
+              ? purchasePrice
+              : null
+            : null,
+        }),
       });
       await loadAll();
+      broadcastItemsChanged();
     } catch (e) {
       alert(e.message || "Could not update this item.");
     }
@@ -179,6 +211,7 @@ const Wishlist = () => {
     try {
       await apiRequest(`/api/cart-items/${itemId}`, { method: "DELETE" });
       await loadAll();
+      broadcastItemsChanged();
     } catch (e) {
       alert(e.message || "Could not remove this item.");
     } finally {
@@ -238,7 +271,7 @@ const Wishlist = () => {
   };
 
   return (
-    <div className="page-wrapper">
+    <div className="page-wrapper wishlist-page">
       <div className="sidebar-container-wrapper">
         <Sidebar wishlists={sidebarLists} showExtension={false} />
       </div>
@@ -256,9 +289,13 @@ const Wishlist = () => {
           <div className="header-content">
             <h1 className="wishlist-title">{listName}</h1>
 
-            <div className="stats">
-              <span>
-                Open items value: <strong>{formatMoney(totalOpen)}</strong>
+            <div className="stats stats-wishlist-meta">
+              <span title="Total price of items you still haven’t marked purchased.">
+                Open (not purchased): <strong>{formatMoney(totalOpen)}</strong>
+              </span>
+              <span className="text-gray-300">•</span>
+              <span title="Total amount recorded for purchased items on this list.">
+                Purchased: <strong>{formatMoney(totalPurchasedValue)}</strong>
               </span>
               <span className="text-gray-300">•</span>
               <span>Updated {lastUpdated}</span>
@@ -279,88 +316,84 @@ const Wishlist = () => {
                 <option value="purchased">Purchased</option>
               </select>
             </div>
-            <button type="button" className="tool-btn" onClick={handleShare}>
-              <LuShare2 size={16} /> Share
-            </button>
-            {isOwner ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  className="tool-btn text-xs"
-                  onClick={async () => {
-                    try {
-                      const next =
-                        String(group?.visibility || "").toLowerCase() === "shared"
-                          ? "Private"
-                          : "Shared";
-                      await apiRequest(`/api/groups/${groupId}`, {
-                        method: "PATCH",
-                        body: JSON.stringify({ visibility: next }),
-                      });
-                      setInviteMsg(
-                        next === "Shared"
-                          ? "List is now shared. Add a collaborator email below."
-                          : "List is now private."
-                      );
-                      await loadAll();
-                    } catch (e) {
-                      setInviteMsg(e.message || "Could not update.");
-                    }
-                  }}
-                >
-                  {String(group?.visibility || "").toLowerCase() === "shared"
-                    ? "Make private"
-                    : "Make shared"}
+            {isSharedList ? (
+              isOwner ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="email"
+                    className="wishlist-invite-email rounded border border-white/30 bg-white/10 px-2 py-1 text-sm text-white placeholder:text-amber-100/50 min-w-[12rem]"
+                    placeholder="Email to invite"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                  />
+                  <button type="button" className="tool-btn" onClick={handleInvite}>
+                    <LuUsers size={16} /> Invite
+                  </button>
+                </div>
+              ) : null
+            ) : (
+              <>
+                <button type="button" className="tool-btn" onClick={handleShare}>
+                  <LuShare2 size={16} /> Share
                 </button>
-                {String(group?.visibility || "").toLowerCase() === "shared" ? (
-                  <>
-                    <input
-                      type="email"
-                      className="rounded border border-gray-300 px-2 py-1 text-sm"
-                      placeholder="Email to invite"
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                    />
-                    <button type="button" className="tool-btn" onClick={handleInvite}>
-                      <LuUsers size={16} /> Invite
-                    </button>
-                  </>
+                {isOwner ? (
+                  <button
+                    type="button"
+                    className="tool-btn text-xs"
+                    onClick={async () => {
+                      try {
+                        await apiRequest(`/api/groups/${groupId}`, {
+                          method: "PATCH",
+                          body: JSON.stringify({ visibility: "Shared" }),
+                        });
+                        setInviteMsg("List is now shared. Invite collaborators by email.");
+                        await loadAll();
+                      } catch (e) {
+                        setInviteMsg(e.message || "Could not update.");
+                      }
+                    }}
+                  >
+                    Make shared
+                  </button>
                 ) : null}
-              </div>
-            ) : null}
+              </>
+            )}
             <button type="button" className="tool-btn edit" onClick={handleRename}>
               <LuPen size={16} /> Rename list
             </button>
           </div>
-          {String(group?.visibility || "").toLowerCase() === "shared" ? (
-            <div className="mb-4 rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700">
-              <p className="font-semibold">Members</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
-                  {group?.owner_id === undefined ? "Owner" : "Owner listed below"}
+          {isSharedList ? (
+            <div className="wishlist-members-strip">
+              <p className="wishlist-members-title">Members</p>
+              <div className="wishlist-members-pills">
+                <span className="wishlist-member-pill wishlist-member-pill--highlight">
+                  Owner listed below
                 </span>
                 {members.length > 0 ? (
                   members.map((m) => (
                     <span
                       key={`${m.group_id}-${m.user_id}`}
-                      className="rounded-full bg-slate-100 px-2 py-1 text-xs"
+                      className="wishlist-member-pill"
                     >
-                      {(m.username || m.email || `User #${m.user_id}`)} - {m.role || "Editor"}
+                      {(m.username || m.email || `User #${m.user_id}`)} — {m.role || "Editor"}
                     </span>
                   ))
                 ) : (
-                  <span className="text-xs text-gray-500">No collaborators yet.</span>
+                  <span className="wishlist-members-empty">No collaborators yet.</span>
                 )}
               </div>
             </div>
           ) : null}
-          {inviteMsg ? <p className="text-sm text-gray-600">{inviteMsg}</p> : null}
+          {isSharedList ? (
+            <WishlistListChat groupId={groupId} enabled={isSharedList} />
+          ) : null}
+          {inviteMsg ? <p className="wishlist-invite-msg text-sm text-amber-100/90">{inviteMsg}</p> : null}
         </header>
 
         <section className="item-grid">
           {filteredItems.length === 0 ? (
             <p className="col-span-full text-gray-500">
-              No items in this view. Add items with the browser extension.
+              No items in this view. Use the Cart-It extension on any store’s product page to add items.
             </p>
           ) : (
             filteredItems.map((item) => (
@@ -414,7 +447,7 @@ const Wishlist = () => {
                       ? purchasedPriceLabel(item)
                       : formatMoney(item.current_price)}
                   </p>
-                  <label className="mt-2 flex items-center gap-2 text-xs text-gray-600">
+                  <label className="mt-2 flex items-center gap-2 text-xs text-slate-700">
                     <input
                       type="checkbox"
                       checked={!!item.is_purchased}

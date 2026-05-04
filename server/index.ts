@@ -116,6 +116,8 @@ interface UpdateCartItemBody
    * WHAT: `out_of_stock: true` means we set `is_in_stock = false` in the database.
    */
   out_of_stock?: boolean;
+  /** When true, server re-fetches `product_url` and updates `current_price` (fixes bad scrapes like Amazon “$35 shipping”). */
+  refresh_list_price?: boolean;
 }
 
 interface InviteGroupMemberBody 
@@ -819,9 +821,69 @@ function normalizeProductImageUrl(raw: string, pageUrl: string): string | null {
   }
 }
 
+/** Skip Amazon placeholder / UI chrome URLs we never want as the product card image. */
+function isLikelyAmazonPlaceholderImageUrl(u: string): boolean {
+  const s = u.toLowerCase();
+  return (
+    s.includes("grey-pixel") ||
+    s.includes("gray-pixel") ||
+    s.includes("transparent-pixel") ||
+    s.includes("/play-icon") ||
+    s.includes("spin360") ||
+    s.includes("360_icon")
+  );
+}
+
+function pickBestAmazonImageFromDynamicKeys(keys: string[]): string | null {
+  const urls = keys.filter((k) => /^https?:\/\//i.test(k));
+  if (urls.length === 0) return null;
+  const amazon = urls.filter((u) => /m\.media-amazon\.com\/images\/I\//i.test(u));
+  const pool = amazon.length ? amazon : urls;
+  const scored = pool.map((u) => {
+    const sl = u.match(/_SL(\d+)_/i);
+    const score = sl ? Number(sl[1]) : u.length;
+    return { u, score };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0]?.u ?? null;
+}
+
+function parseDataDynamicImageAttr(raw: string): string | null {
+  try {
+    const jsonish = raw.replace(/&quot;/g, '"').replace(/&#34;/g, '"');
+    const obj = JSON.parse(jsonish) as Record<string, unknown>;
+    return pickBestAmazonImageFromDynamicKeys(Object.keys(obj));
+  } catch {
+    return null;
+  }
+}
+
+function extractAmazonHiResFromScripts(html: string, pageUrl: string): string | null {
+  const patterns = [
+    /"hiRes"\s*:\s*"(https:\\\/\\\/m\.media-amazon\.com[^"\\]+)"/gi,
+    /"hiRes"\s*:\s*"(https:\/\/m\.media-amazon\.com[^"]+)"/gi,
+    /'hiRes'\s*:\s*'(https:\/\/m\.media-amazon\.com[^']+)'/gi,
+    /"large"\s*:\s*"(https:\/\/m\.media-amazon\.com[^"]+)"/gi,
+  ];
+  for (const re of patterns) {
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(html)) !== null) {
+      const raw = String(m[1] || "").replace(/\\\//g, "/");
+      const u = normalizeProductImageUrl(raw, pageUrl);
+      if (u && !isLikelyAmazonPlaceholderImageUrl(u) && /images\/I\//i.test(u)) return u;
+    }
+  }
+  return null;
+}
+
 /**
  * Best-effort main product image from public PDP HTML (same signals as browsers use for previews).
  * Used when the extension omits image_url or Amazon serves empty og:image to scripted fetches.
+ *
+ * Amazon "Used / refurbished" and some PDP variants omit `landingImage` src in the initial HTML,
+ * use only `data-old-hires`, put URLs inside script JSON (`hiRes`), or include multiple
+ * `data-a-dynamic-image` blobs — ScrapingBee uses render_js=false so we must parse those static cues.
  */
 function extractProductImageFromHtml(html: string, pageUrl: string): string | null {
   const ogMatch =
@@ -829,29 +891,49 @@ function extractProductImageFromHtml(html: string, pageUrl: string): string | nu
     html.match(/<meta[^>]+content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
   if (ogMatch?.[1]) {
     const u = normalizeProductImageUrl(ogMatch[1], pageUrl);
-    if (u) return u;
+    if (u && !isLikelyAmazonPlaceholderImageUrl(u)) return u;
   }
   const twMatch = html.match(/<meta[^>]+name=["']twitter:image(?::src)?["'][^>]*content=["']([^"']+)["']/i);
   if (twMatch?.[1]) {
     const u = normalizeProductImageUrl(twMatch[1], pageUrl);
-    if (u) return u;
+    if (u && !isLikelyAmazonPlaceholderImageUrl(u)) return u;
   }
-  const landingMatch = html.match(/id=["']landingImage["'][^>]*src=["']([^"']+)["']/i);
-  if (landingMatch?.[1]) {
-    const u = normalizeProductImageUrl(landingMatch[1], pageUrl);
-    if (u) return u;
-  }
-  const dynMatch = html.match(/data-a-dynamic-image=["']([^"']+)["']/i);
-  if (dynMatch?.[1]) {
-    try {
-      const jsonish = dynMatch[1].replace(/&quot;/g, '"').replace(/&#34;/g, '"');
-      const obj = JSON.parse(jsonish) as Record<string, unknown>;
-      const first = Object.keys(obj)[0];
-      if (first && /^https?:\/\//i.test(first)) return first;
-    } catch {
-      /* ignore */
+
+  const landingImgTag = html.match(/<img\b[^>]*\bid=["']landingImage["'][^>]*>/i);
+  if (landingImgTag?.[0]) {
+    const tag = landingImgTag[0];
+    const pick = (name: string) => {
+      const mm = tag.match(new RegExp(`\\s${name}=["']([^"']+)["']`, "i"));
+      return mm?.[1];
+    };
+    const order = ["data-old-hires", "data-src", "src", "data-a-dynamic-image"];
+    for (const attr of order) {
+      const val = pick(attr);
+      if (!val) continue;
+      if (attr === "data-a-dynamic-image") {
+        const fromDyn = parseDataDynamicImageAttr(val);
+        if (fromDyn) return fromDyn;
+      } else {
+        const u = normalizeProductImageUrl(val, pageUrl);
+        if (u && !isLikelyAmazonPlaceholderImageUrl(u)) return u;
+      }
     }
   }
+
+  const legacyLanding = html.match(/id=["']landingImage["'][^>]*src=["']([^"']+)["']/i);
+  if (legacyLanding?.[1]) {
+    const u = normalizeProductImageUrl(legacyLanding[1], pageUrl);
+    if (u && !isLikelyAmazonPlaceholderImageUrl(u)) return u;
+  }
+
+  for (const m of html.matchAll(/data-a-dynamic-image=["']([^"']+)["']/gi)) {
+    const fromDyn = parseDataDynamicImageAttr(m[1]);
+    if (fromDyn) return fromDyn;
+  }
+
+  const fromScript = extractAmazonHiResFromScripts(html, pageUrl);
+  if (fromScript) return fromScript;
+
   return null;
 }
 
@@ -2448,12 +2530,28 @@ app.post(
         message: `${ownerDisplay} invited you to collaborate on "${groupLabel}".`,
       });
 
-      await insertUserNotification({
-        userId: owner_id,
-        itemId: anchorItemId,
-        groupId: group_id,
-        message: `${invitedLabel} joined "${groupLabel}" as Editor.`,
-      });
+      const peerNotify = await pool.query(
+        `
+        SELECT DISTINCT uid FROM (
+          SELECT owner_id AS uid FROM groups WHERE group_id = $1
+          UNION
+          SELECT user_id AS uid FROM group_members WHERE group_id = $1
+        ) peers
+        WHERE uid IS NOT NULL AND uid <> $2
+        `,
+        [group_id, invitedUser.user_id]
+      );
+      const joinMsg = `${invitedLabel} joined "${groupLabel}" as Editor.`;
+      for (const row of peerNotify.rows) {
+        const uid = Number(row.uid);
+        if (!Number.isFinite(uid)) continue;
+        await insertUserNotification({
+          userId: uid,
+          itemId: anchorItemId,
+          groupId: group_id,
+          message: joinMsg,
+        });
+      }
 
       return res.status(200).json({
         message: emailResult.sent
@@ -2551,6 +2649,42 @@ app.post(
           "Could not determine a valid price. Enter a positive price in the extension, or use a product URL the server can open.",
       });
     }
+
+    /**
+     * Amazon PDPs often mislead pure DOM scrapes (e.g. “free shipping over $35”).
+     * When ScrapingBee is configured we fetch the same HTML path as the price-check job and prefer
+     * server-side price + image for Amazon saves (extension + website).
+     */
+    let resolvedImage: string | null =
+      typeof image_url === "string" && image_url.trim() !== "" ? image_url.trim() : null;
+    const enrichAmazonFlag = String(process.env.SCRAPINGBEE_ENRICH_AMAZON ?? "1")
+      .trim()
+      .toLowerCase();
+    const enrichAmazon =
+      scrapingBeeConfigured() &&
+      isAmazonProductUrl(productUrl) &&
+      enrichAmazonFlag !== "false" &&
+      enrichAmazonFlag !== "0";
+    if (enrichAmazon) {
+      const html = await loadProductHtml();
+      if (html) {
+        const serverPrice = extractPriceFromHtml(html);
+        if (serverPrice != null && serverPrice > 0) {
+          priceNum = serverPrice;
+        }
+        const serverImg = extractProductImageFromHtml(html, productUrl);
+        if (serverImg) {
+          resolvedImage = serverImg;
+        }
+      }
+    } else if (!resolvedImage && productUrl) {
+      const html = await loadProductHtml();
+      if (html) {
+        const extracted = extractProductImageFromHtml(html, productUrl);
+        if (extracted) resolvedImage = extracted;
+      }
+    }
+
     if (is_in_stock !== undefined && typeof is_in_stock !== "boolean") {
       return res.status(400).json({
         message: "is_in_stock must be a boolean when provided",
@@ -2583,16 +2717,6 @@ app.post(
         });
       }
       resolvedGroupId = gid;
-    }
-
-    let resolvedImage: string | null =
-      typeof image_url === "string" && image_url.trim() !== "" ? image_url.trim() : null;
-    if (!resolvedImage && productUrl) {
-      const html = await loadProductHtml();
-      if (html) {
-        const extracted = extractProductImageFromHtml(html, productUrl);
-        if (extracted) resolvedImage = extracted;
-      }
     }
 
     // Persist item row first (cart_items is the source of truth shown in UI cards).
@@ -2684,6 +2808,7 @@ app.patch(
         purchase_price,
         is_in_stock,
         out_of_stock,
+        refresh_list_price,
       } = req.body;
       let normalizedPurchasePrice = purchase_price;
 
@@ -2714,6 +2839,51 @@ app.patch(
         mergedInStock = !out_of_stock;
       }
 
+      const ownerCheck = await pool.query(
+        `
+        SELECT user_id, group_id, current_price, item_name, is_in_stock, product_url
+        FROM cart_items
+        WHERE item_id = $1
+        `,
+        [item_id]
+      );
+
+      if (ownerCheck.rows.length === 0) {
+        return res.status(404).json({ message: "Item not found" });
+      }
+
+      const itemGroupIdForNotify =
+        ownerCheck.rows[0].group_id != null &&
+        Number.isFinite(Number(ownerCheck.rows[0].group_id))
+          ? Number(ownerCheck.rows[0].group_id)
+          : null;
+
+      const canEdit = await userCanEditCartItemRow(owner_id, {
+        user_id: ownerCheck.rows[0].user_id,
+        group_id: ownerCheck.rows[0].group_id,
+      });
+      if (!canEdit) {
+        return res.status(403).json({ message: "You cannot update this item" });
+      }
+
+      let refreshedListPrice: number | null = null;
+      if (refresh_list_price === true) {
+        const url = String(ownerCheck.rows[0].product_url || "").trim();
+        if (!url) {
+          return res.status(400).json({
+            message: "This item has no product URL; add a link before refreshing price.",
+          });
+        }
+        const snapshot = await fetchProductSnapshotFromUrl(url);
+        if (snapshot.price == null || !(snapshot.price > 0)) {
+          return res.status(422).json({
+            message:
+              "Could not read a current price from the product page. Try again later or set price manually.",
+          });
+        }
+        refreshedListPrice = snapshot.price;
+      }
+
       if (group_id !== undefined) {
         fieldsToUpdate.push(`group_id = $${valueIndex++}`);
         values.push(group_id);
@@ -2734,7 +2904,10 @@ app.patch(
         fieldsToUpdate.push(`store = $${valueIndex++}`);
         values.push(store);
       }
-      if (current_price !== undefined) {
+      if (refreshedListPrice != null) {
+        fieldsToUpdate.push(`current_price = $${valueIndex++}`);
+        values.push(refreshedListPrice);
+      } else if (current_price !== undefined) {
         if (Number(current_price) < 0) {
           return res.status(400).json({
             message: "current_price must be a non-negative number",
@@ -2769,33 +2942,6 @@ app.patch(
         }
         fieldsToUpdate.push(`purchase_price = $${valueIndex++}`);
         values.push(normalizedPurchasePrice);
-      }
-
-      const ownerCheck = await pool.query(
-        `
-        SELECT user_id, group_id, current_price, item_name, is_in_stock
-        FROM cart_items
-        WHERE item_id = $1
-        `,
-        [item_id]
-      );
-
-      if (ownerCheck.rows.length === 0) {
-        return res.status(404).json({ message: "Item not found" });
-      }
-
-      const itemGroupIdForNotify =
-        ownerCheck.rows[0].group_id != null &&
-        Number.isFinite(Number(ownerCheck.rows[0].group_id))
-          ? Number(ownerCheck.rows[0].group_id)
-          : null;
-
-      const canEdit = await userCanEditCartItemRow(owner_id, {
-        user_id: ownerCheck.rows[0].user_id,
-        group_id: ownerCheck.rows[0].group_id,
-      });
-      if (!canEdit) {
-        return res.status(403).json({ message: "You cannot update this item" });
       }
 
       let savedPrivateNotes = false;
@@ -2841,11 +2987,27 @@ app.patch(
         }
         updatedRow = result.rows[0];
 
+        if (
+          refreshedListPrice != null &&
+          Number.isFinite(refreshedListPrice) &&
+          refreshedListPrice !== previousPrice
+        ) {
+          await pool.query(`INSERT INTO price_history (item_id, price) VALUES ($1, $2)`, [
+            item_id,
+            refreshedListPrice,
+          ]);
+        }
+
         const nextPrice =
-          current_price !== undefined && Number.isFinite(Number(current_price))
-            ? Number(current_price)
-            : previousPrice;
-        if (current_price !== undefined && nextPrice < previousPrice) {
+          refreshedListPrice != null
+            ? refreshedListPrice
+            : current_price !== undefined && Number.isFinite(Number(current_price))
+              ? Number(current_price)
+              : previousPrice;
+        if (
+          (refreshedListPrice != null || current_price !== undefined) &&
+          nextPrice < previousPrice
+        ) {
           const itemOwnerId = ownerCheck.rows[0].user_id;
           await insertUserNotification({
             userId: itemOwnerId,

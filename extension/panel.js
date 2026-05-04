@@ -54,6 +54,8 @@ function getPageData() {
       "#priceblock_ourprice",
       "#priceblock_dealprice",
       "#priceblock_saleprice",
+      "#reinvent_price_desktop_buybox .a-price .a-offscreen",
+      "#apex_desktop .a-price .a-offscreen",
       'span[data-a-color="price"] .a-offscreen',
       ".a-price.aok-align-center .a-offscreen",
       ".a-price .a-offscreen",
@@ -76,6 +78,30 @@ function getPageData() {
       if (parsed != null) return parsed;
     }
     return null;
+  };
+
+  /** When primary selectors miss (A/B layouts), collect .a-offscreen money in buybox-ish roots — min tends to be the deal price, not "List". */
+  const getAmazonPriceFromBuybox = () => {
+    const roots = [
+      document.querySelector("#buybox"),
+      document.querySelector("#desktop_buybox"),
+      document.querySelector("#unifiedPrice_feature_div"),
+      document.querySelector("#corePriceDisplay_desktop_feature_div"),
+      document.querySelector("#corePrice_feature_div"),
+      document.querySelector("#apex_desktop"),
+      document.querySelector("#rightCol"),
+    ].filter(Boolean);
+    const amounts = [];
+    for (const root of roots) {
+      root.querySelectorAll(".a-offscreen").forEach((el) => {
+        const t = el.textContent || "";
+        if (!/\d+\.\d{2}/.test(t)) return;
+        const p = parsePriceText(t);
+        if (p != null && p >= 0.01 && p < 1_000_000) amounts.push(p);
+      });
+    }
+    if (!amounts.length) return null;
+    return Math.min(...amounts);
   };
 
   /**
@@ -137,8 +163,7 @@ function getPageData() {
 
   let price = null;
   if (isAmazon) {
-    const amazonPrice = getAmazonPrice();
-    if (amazonPrice != null) price = amazonPrice;
+    price = getAmazonPrice() ?? getAmazonPriceFromBuybox();
   }
   const parseJsonPrice = (obj) => {
     if (!obj || typeof obj !== "object") return null;
@@ -172,6 +197,7 @@ function getPageData() {
     return null;
   };
 
+  if (!isAmazon) {
   const metaPriceSelectors = [
     'meta[property="product:price:amount"]',
     'meta[property="og:price:amount"]',
@@ -237,6 +263,7 @@ function getPageData() {
       }
     }
   }
+  }
   // IMPORTANT: Avoid scanning Amazon body text for "$..." because it contains shipping thresholds
   // like "FREE shipping over $35" which are not product prices.
   if (price == null && !isAmazon) {
@@ -257,12 +284,10 @@ function getPageData() {
     }
   }
 
-  const nearCartPrice = priceNearPrimaryAddToCart();
-  // On Amazon, the "near Add to cart" scan can grab "$35" free-shipping thresholds.
-  // Only use it when we still don't have a price.
+  const nearCartPrice = isAmazon ? null : priceNearPrimaryAddToCart();
   if (nearCartPrice != null) {
     if (price == null) price = nearCartPrice;
-    else if (!isAmazon && Math.abs(nearCartPrice - price) >= 0.5) price = nearCartPrice;
+    else if (Math.abs(nearCartPrice - price) >= 0.5) price = nearCartPrice;
   }
 
   const detectInStock = () => {
@@ -706,6 +731,7 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
       return;
     }
 
+    // Server merges Amazon saves with ScrapingBee-backed HTML when SCRAPINGBEE_API_KEY is set (price + image).
     const body = {
       item_name,
       product_url: productUrl,

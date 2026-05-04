@@ -15,7 +15,12 @@ import ForgotPassword from './components/forgot-password';
 import PrivacyPolicy from './components/privacy-policy';
 
 function App() {
+  const buildSha = process.env.REACT_APP_GIT_SHA || "";
+  const shortSha =
+    buildSha.length >= 7 ? buildSha.slice(0, 7) : buildSha;
+
   return (
+    <>
     <Router>
       <Routes>
         <Route path="/" element={<LandingPage />} />
@@ -33,6 +38,16 @@ function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
       </Routes>
     </Router>
+    {shortSha ? (
+      <div
+        className="fixed bottom-1 right-1 z-[9999] max-w-[90vw] truncate font-mono text-[10px] text-black/25 pointer-events-none select-none"
+        title={`Build ${buildSha}`}
+        aria-hidden
+      >
+        {shortSha}
+      </div>
+    ) : null}
+    </>
   );
 }
 

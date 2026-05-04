@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import '../styles/auth.css';
-import { apiRequest } from './api';
+import { apiRequest, API_BASE_URL } from './api';
 
 const Login = () => {
   const navigate = useNavigate(); // Hook for navigation
@@ -19,13 +19,17 @@ const Login = () => {
     if (slowHintTimerRef.current) clearTimeout(slowHintTimerRef.current);
     slowHintTimerRef.current = setTimeout(() => {
       setStatusMessage(
-        'Still connecting… If the app has been idle, the API may be waking from sleep (often 30–90s on free hosting).'
+        'Still connecting… On free hosting (Render), the API often sleeps until the first request — waking it up can take 30–90 seconds. Opening the API root in another tab can help.'
       );
-    }, 5000);
+    }, 4000);
     try {
+      // Wake Render/neighbors: cheap GET while login POST runs (cold-start mitigation).
+      void fetch(`${API_BASE_URL}/`, { mode: 'cors', cache: 'no-store' }).catch(() => {});
+
       const data = await apiRequest('/api/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
+        timeoutMs: 120000,
       });
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));

@@ -43,6 +43,7 @@ const Dashboard = () => {
   const [togglingPurchasedId, setTogglingPurchasedId] = useState(null);
   const [deletingGroupId, setDeletingGroupId] = useState(null);
   const [deletingItemId, setDeletingItemId] = useState(null);
+  const [movingItemId, setMovingItemId] = useState(null);
 
   const reload = useCallback(async () => {
     const [groups, items] = await Promise.all([
@@ -51,6 +52,14 @@ const Dashboard = () => {
     ]);
     setWishlists(Array.isArray(groups) ? groups : []);
     setCartItems(Array.isArray(items) ? items : []);
+  }, []);
+
+  const broadcastItemsChanged = useCallback(() => {
+    try {
+      window.dispatchEvent(new Event("cartit:items-updated"));
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   useEffect(() => {
@@ -97,6 +106,22 @@ const Dashboard = () => {
     [cartItems]
   );
 
+  const privateWishlists = useMemo(
+    () =>
+      wishlists.filter(
+        (w) => String(w.visibility || "Private").toLowerCase() !== "shared"
+      ),
+    [wishlists]
+  );
+
+  const sharedWishlists = useMemo(
+    () =>
+      wishlists.filter(
+        (w) => String(w.visibility || "").toLowerCase() === "shared"
+      ),
+    [wishlists]
+  );
+
   const analyticsSnapshot = useMemo(() => {
     const open = cartItems.filter((i) => !i.is_purchased);
     const purchased = cartItems.filter((i) => i.is_purchased);
@@ -135,6 +160,7 @@ const Dashboard = () => {
       setNewWishlistVisibility("Private");
       setIsModalOpen(false);
       await reload();
+      broadcastItemsChanged();
     } catch (error) {
       console.error("Create wishlist failed:", error);
       alert(error.message || "Could not create wishlist.");
@@ -159,15 +185,25 @@ const Dashboard = () => {
       return;
     }
     const targetGroup = parsed === 0 ? null : parsed;
+    const currentGid =
+      item.group_id != null && item.group_id !== ""
+        ? Number(item.group_id)
+        : null;
+    if (targetGroup === currentGid || (targetGroup == null && currentGid == null)) {
+      return;
+    }
+    setMovingItemId(item.item_id);
     try {
       await apiRequest(`/api/cart-items/${item.item_id}`, {
         method: "PATCH",
         body: JSON.stringify({ group_id: targetGroup }),
       });
-      setMoveTargets((prev) => ({ ...prev, [item.item_id]: "" }));
       await reload();
+      broadcastItemsChanged();
     } catch (error) {
       alert(error.message || "Could not move this item.");
+    } finally {
+      setMovingItemId(null);
     }
   };
 
@@ -175,11 +211,19 @@ const Dashboard = () => {
     if (!item?.item_id) return;
     setTogglingPurchasedId(item.item_id);
     try {
+      const purchasePrice = checked ? Number(item.current_price || 0) : null;
       await apiRequest(`/api/cart-items/${item.item_id}`, {
         method: "PATCH",
-        body: JSON.stringify({ purchased: !!checked }),
+        body: JSON.stringify({
+          purchased: !!checked,
+          purchase_price:
+            checked && Number.isFinite(purchasePrice) && purchasePrice >= 0
+              ? purchasePrice
+              : null,
+        }),
       });
       await reload();
+      broadcastItemsChanged();
     } catch (error) {
       alert(error.message || "Could not update purchase status.");
     } finally {
@@ -201,6 +245,7 @@ const Dashboard = () => {
         return next;
       });
       await reload();
+      broadcastItemsChanged();
     } catch (error) {
       alert(error.message || "Could not remove this item.");
     } finally {
@@ -223,6 +268,7 @@ const Dashboard = () => {
     try {
       await apiRequest(`/api/groups/${id}`, { method: "DELETE" });
       await reload();
+      broadcastItemsChanged();
     } catch (error) {
       alert(error.message || "Could not delete this wishlist.");
     } finally {
@@ -241,6 +287,9 @@ const Dashboard = () => {
 
         <section className="wishlist-section">
           <h2 className="dash-wishlist-title">My Wishlists</h2>
+          <p className="dash-wishlist-sub mb-4 text-sm italic text-white/80">
+            Private lists only you manage from here.
+          </p>
           <div className="wishlist-grid">
             <button
               type="button"
@@ -251,8 +300,8 @@ const Dashboard = () => {
               <span className="create-wishlist-label">Create New Wishlist</span>
             </button>
 
-            {wishlists.length > 0 ? (
-              wishlists.map((list) => {
+            {privateWishlists.length > 0 ? (
+              privateWishlists.map((list) => {
                 const id = list.group_id ?? list.id;
                 const label = list.group_name ?? list.name ?? "Untitled";
                 const n = groupItemCount(id);
@@ -295,9 +344,71 @@ const Dashboard = () => {
                   </div>
                 );
               })
-            ) : (
+            ) : wishlists.length === 0 ? (
               <div className="empty-state">
                 No wishlists yet — start by creating one.
+              </div>
+            ) : (
+              <div className="empty-state">
+                No private lists yet — shared lists appear under Group Wishlists.
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="wishlist-section mt-10">
+          <h2 className="dash-wishlist-title">Group Wishlists</h2>
+          <p className="dash-wishlist-sub mb-4 text-sm italic text-white/80">
+            Shared lists you own or were invited to — collaborate and chat with your group.
+          </p>
+          <div className="wishlist-grid">
+            {sharedWishlists.length > 0 ? (
+              sharedWishlists.map((list) => {
+                const id = list.group_id ?? list.id;
+                const label = list.group_name ?? list.name ?? "Untitled";
+                const n = groupItemCount(id);
+                const visibility = String(list.visibility || "Shared");
+                const canDelete =
+                  String(list.access_role || "").toLowerCase() === "owner";
+                return (
+                  <div key={id} className="wishlist-card">
+                    {canDelete ? (
+                      <button
+                        type="button"
+                        className="wishlist-card-delete"
+                        disabled={deletingGroupId === id}
+                        title="Delete wishlist"
+                        aria-label={`Delete wishlist ${label}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteWishlist(list);
+                        }}
+                      >
+                        <LuTrash2 size={16} aria-hidden />
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="wishlist-card-main"
+                      onClick={() => navigate(`/wishlist/${id}`)}
+                    >
+                      <WishlistCardCover imageUrl={coverImageByGroupId[id] ?? null} />
+                      <div className="wishlist-card-footer">
+                        <span className="wishlist-card-name">{label}</span>
+                        <span className="text-[11px] font-semibold text-orange-700">
+                          {visibility}
+                        </span>
+                        <span className="wishlist-item-count">
+                          {n} {n === 1 ? "item" : "items"}
+                        </span>
+                      </div>
+                    </button>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="empty-state">
+                No shared lists yet — mark a list as Shared or accept an invite.
               </div>
             )}
           </div>
@@ -314,8 +425,11 @@ const Dashboard = () => {
                 </div>
               </div>
               <div>
-                <div className="opacity-80">Open items (not purchased)</div>
-                <div className="text-lg font-bold">
+                <div className="opacity-80">Open items</div>
+                <div className="text-[11px] leading-snug opacity-70 normal-case not-italic font-normal">
+                  Saved in your cart or wishlists, not marked purchased yet.
+                </div>
+                <div className="text-lg font-bold mt-1">
                   {analyticsSnapshot.openCount}
                 </div>
               </div>
@@ -351,14 +465,23 @@ const Dashboard = () => {
             <h2 className="card-header">Recent Cart Items</h2>
             <div className="cart-grid">
               {recentItems.length > 0 ? (
-                recentItems.slice(0, 8).map((item) => (
+                recentItems.slice(0, 8).map((item) => {
+                  const currentGroupVal =
+                    item.group_id != null && item.group_id !== ""
+                      ? String(item.group_id)
+                      : "0";
+                  const selectVal =
+                    moveTargets[item.item_id] !== undefined
+                      ? moveTargets[item.item_id]
+                      : currentGroupVal;
+                  return (
                   <div key={item.item_id} className="cart-item-card text-left text-black">
                     <div className="recent-cart-item-image-wrap">
                       <button
                         type="button"
                         className="dashboard-recent-item-delete"
                         disabled={deletingItemId === item.item_id}
-                        title="Remove item"
+                        title="Remove from Cart-It"
                         aria-label={`Remove ${item.item_name || "item"}`}
                         onClick={() => handleDeleteCartItem(item)}
                       >
@@ -392,41 +515,44 @@ const Dashboard = () => {
                       />
                       Mark purchased
                     </label>
-                    <div className="mt-2 flex flex-col gap-1">
+                    <div className="mt-2 flex flex-col gap-1 border-t border-slate-100 pt-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                        Move to wishlist
+                      </span>
                       <select
-                        className="w-full min-w-0 rounded-md border border-slate-300 px-2 py-1 text-xs"
-                        value={moveTargets[item.item_id] ?? ""}
-                        onChange={(e) =>
+                        className="w-full min-w-0 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs font-medium text-slate-800"
+                        disabled={movingItemId === item.item_id}
+                        aria-label={`Move ${item.item_name || "item"} to another list`}
+                        value={selectVal}
+                        onChange={(e) => {
+                          const val = e.target.value;
                           setMoveTargets((prev) => ({
                             ...prev,
-                            [item.item_id]: e.target.value,
-                          }))
-                        }
+                            [item.item_id]: val,
+                          }));
+                          if (val !== "") {
+                            handleMoveItemToWishlist(item, val);
+                          }
+                        }}
                       >
-                        <option value="">Select wishlist</option>
-                        <option value="0">No wishlist (cart only)</option>
+                        <option value="0">Cart only (no wishlist)</option>
                         {wishlists.map((w) => {
                           const id = w.group_id ?? w.id;
                           const name = w.group_name ?? w.name ?? "Untitled";
                           return (
-                            <option key={id} value={id}>
+                            <option key={id} value={String(id)}>
                               {name}
                             </option>
                           );
                         })}
                       </select>
-                      <button
-                        type="button"
-                        className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                        onClick={() =>
-                          handleMoveItemToWishlist(item, moveTargets[item.item_id])
-                        }
-                      >
-                        Move
-                      </button>
+                      {movingItemId === item.item_id ? (
+                        <span className="text-[10px] text-slate-500">Moving…</span>
+                      ) : null}
                     </div>
                   </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="col-span-full text-center text-sm text-white/80">
                   No items yet. Save something with the extension to see it

@@ -55,6 +55,129 @@
   .store { @apply text-xs uppercase tracking-wider text-gray-400 font-semibold; }
   .name { @apply font-bold text-gray-900 mt-1 break-words; }
   .price { @apply font-bold text-gray-900 mt-2; }
+
+  /* ─── Wishlist detail (purple shell like dashboard; cart keeps light theme) ─── */
+  .wishlist-page {
+    @apply bg-[#4A103D] text-[#fff7ed];
+  }
+  .wishlist-page .sidebar-container-wrapper {
+    @apply border-r border-white/15;
+  }
+  .wishlist-page .detail-main {
+    @apply bg-transparent;
+  }
+  .wishlist-page .back-link {
+    @apply text-amber-100/90 hover:text-white mb-6;
+  }
+  .wishlist-page .wishlist-title {
+    @apply text-white drop-shadow-sm;
+  }
+  .wishlist-page .stats {
+    @apply text-amber-100/85 mt-2;
+  }
+  .wishlist-page .tool-btn {
+    @apply bg-white/10 border-white/25 text-white hover:bg-white/15 shadow-none backdrop-blur-sm;
+  }
+  .wishlist-page .tool-btn.edit {
+    @apply bg-[#DB8046] border-transparent hover:bg-[#c96d38];
+  }
+  .wishlist-page .toolbar-filter-wrap {
+    @apply bg-white/10 border-white/25 text-white shadow-none backdrop-blur-sm;
+  }
+  .wishlist-page .toolbar-filter-select {
+    @apply text-white font-medium;
+  }
+
+  .wishlist-members-strip {
+    @apply mb-6 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 backdrop-blur-md;
+  }
+  .wishlist-members-title {
+    @apply text-sm font-semibold tracking-wide text-white mb-2;
+  }
+  .wishlist-members-pills {
+    @apply flex flex-wrap gap-2 items-center;
+  }
+  .wishlist-member-pill {
+    @apply rounded-full bg-black/25 px-3 py-1 text-xs font-medium text-amber-50 border border-white/10;
+  }
+  .wishlist-member-pill--highlight {
+    @apply bg-[#2563eb]/40 border-[#93c5fd]/40 text-white font-semibold;
+  }
+  .wishlist-members-empty {
+    @apply text-xs text-amber-100/70;
+  }
+
+  /* List-wide group chat (shared wishlists) */
+  .wishlist-list-chat-panel {
+    @apply mt-6 mb-10 rounded-2xl border border-white/20 bg-black/20 p-4 md:p-5 backdrop-blur-sm;
+  }
+  .wishlist-list-chat-heading {
+    @apply m-0 text-lg font-bold text-white tracking-tight;
+  }
+  .wishlist-list-chat-lead {
+    @apply mt-1 mb-3 text-sm text-amber-100/85;
+  }
+  .wishlist-list-chat-thread {
+    @apply max-h-52 md:max-h-64;
+  }
+
+  .wishlist-page .item-card {
+    @apply bg-white/[0.97] border border-white/25 shadow-lg hover:shadow-xl rounded-2xl;
+  }
+  .wishlist-page .store {
+    @apply text-[#7c3aed]/90;
+  }
+  .wishlist-page .name {
+    @apply text-[#1e1b4b];
+  }
+  .wishlist-page .price {
+    @apply text-[#4c1d95];
+  }
+
+  /* Group chat under each card */
+  .wishlist-group-chat {
+    @apply mt-3 rounded-xl border border-[#e9d5ff]/80 bg-[#faf5ff]/90 overflow-hidden text-left;
+  }
+  .wishlist-group-chat-summary {
+    @apply cursor-pointer list-none px-3 py-2 text-xs font-bold uppercase tracking-wide text-[#5b21b6]
+    bg-[#f3e8ff] hover:bg-[#ede9fe];
+  }
+  .wishlist-group-chat-summary::-webkit-details-marker {
+    display: none;
+  }
+  .wishlist-group-chat-body {
+    @apply px-3 pb-3 pt-1 border-t border-[#e9d5ff]/60;
+  }
+  .wishlist-group-chat-status,
+  .wishlist-group-chat-empty {
+    @apply text-xs text-slate-500 py-2;
+  }
+  .wishlist-group-chat-thread {
+    @apply max-h-40 overflow-y-auto space-y-2 mb-2;
+  }
+  .wishlist-group-chat-row {
+    @apply text-xs rounded-lg bg-white/90 px-2 py-1.5 border border-violet-100;
+  }
+  .wishlist-group-chat-meta {
+    @apply flex flex-wrap gap-x-2 gap-y-0 items-baseline text-[10px] text-slate-500 mb-0.5;
+  }
+  .wishlist-group-chat-email {
+    @apply truncate max-w-[9rem] opacity-80;
+  }
+  .wishlist-group-chat-time {
+    @apply ml-auto text-[10px] text-slate-400;
+  }
+  .wishlist-group-chat-text {
+    @apply text-slate-800 whitespace-pre-wrap break-words;
+  }
+  .wishlist-group-chat-input {
+    @apply w-full rounded-lg border border-violet-200 px-2 py-1.5 text-xs text-slate-800
+    placeholder:text-slate-400 focus:border-[#DB8046] focus:outline-none focus:ring-1 focus:ring-[#DB8046]/30;
+  }
+  .wishlist-group-chat-send {
+    @apply mt-2 w-full rounded-lg bg-[#7c3aed] py-1.5 text-xs font-semibold text-white
+    hover:bg-[#6d28d9] disabled:opacity-50 disabled:pointer-events-none transition-colors;
+  }
 }
 
 @media (max-width: 1024px) {

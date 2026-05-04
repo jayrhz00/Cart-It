@@ -39,10 +39,13 @@ export default function SpendingAnalyticsPage() {
     loadItems();
     const pollId = window.setInterval(loadItems, 30000);
     const onFocus = () => loadItems();
+    const onItemsUpdated = () => loadItems();
     window.addEventListener("focus", onFocus);
+    window.addEventListener("cartit:items-updated", onItemsUpdated);
     return () => {
       window.clearInterval(pollId);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("cartit:items-updated", onItemsUpdated);
     };
   }, [navigate]);
 
@@ -54,10 +57,10 @@ export default function SpendingAnalyticsPage() {
     else start.setFullYear(now.getFullYear() - 1);
     return items.filter((item) => {
       if (!item?.is_purchased) return false;
-      const ts = item.purchase_date || item.updated_at || item.created_at;
-      if (!ts) return true;
-      const d = new Date(ts);
-      if (Number.isNaN(d.getTime())) return true;
+      const raw = item.purchase_date || item.updated_at || item.created_at;
+      if (!raw) return false;
+      const d = new Date(raw);
+      if (Number.isNaN(d.getTime())) return false;
       return d >= start && d <= now;
     });
   }, [items, activeRange]);

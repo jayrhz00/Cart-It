@@ -238,9 +238,11 @@ export default function WishlistCategoryPage() {
             <button type="button" className="wishlist-toolbar-btn" onClick={handleFilterClick}>
               Filter ({activeFilter === "all" ? "All" : activeFilter === "open" ? "Open" : "Purchased"})
             </button>
-            <button type="button" className="wishlist-toolbar-btn" onClick={handleShareWishlist}>
-              Share
-            </button>
+            {String(group?.visibility || "").toLowerCase() !== "shared" ? (
+              <button type="button" className="wishlist-toolbar-btn" onClick={handleShareWishlist}>
+                Share
+              </button>
+            ) : null}
             <button type="button" className="wishlist-toolbar-btn" onClick={handleToggleCollab}>
               Collab
             </button>

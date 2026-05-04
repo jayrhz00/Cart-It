@@ -121,28 +121,27 @@
   <body>
     <div class="wrap">
       <div class="card">
-        <div class="pill">Fastest path</div>
+        <div class="pill">Approved stores</div>
         <h1>Install Cart-It</h1>
         <p class="lead">
-          Published extensions install in <strong>one click</strong> from each store (Chrome, Edge, Firefox). Paste your live listing URLs into <code>STORE_URLS</code> in this file — for Firefox, use your
-          <a href="https://addons.mozilla.org/developers/" style="color: #fed7aa" target="_blank" rel="noopener noreferrer">AMO</a> add-on page URL. Until then, use the zip below.
+          Cart-It is listed on <strong>Microsoft Edge Add-ons</strong> and <strong>Mozilla (AMO)</strong>. Users install in
+          <strong>one click</strong> from those pages when you paste your public listing URLs into <code>STORE_URLS</code>
+          below (Edge store URL + Firefox add-on URL). Until then, developers can use the zip with
+          <strong>Load unpacked</strong>.
         </p>
 
         <div class="btn-row" id="storeRow" hidden>
-          <a class="btn primary" id="storeChrome" href="#" target="_blank" rel="noopener noreferrer"
-            >Add to Chrome</a
-          >
-          <a class="btn secondary" id="storeEdge" href="#" target="_blank" rel="noopener noreferrer"
-            >Edge Add-ons</a
+          <a class="btn primary" id="storeEdge" href="#" target="_blank" rel="noopener noreferrer"
+            >Get it on Edge — one click</a
           >
           <a class="btn ghost" id="storeFirefox" href="#" target="_blank" rel="noopener noreferrer"
-            >Firefox Add-ons</a
+            >Add to Firefox — one click</a
           >
         </div>
 
         <div class="btn-row">
           <a
-            class="btn primary"
+            class="btn secondary"
             id="zipDownload"
             href="/cart-it-extension.zip"
             download="cart-it-extension.zip"
@@ -150,47 +149,48 @@
           >
         </div>
         <p class="hint" id="zipHint">
-          Unzip the folder, then in Chrome or Edge: <code>chrome://extensions</code> or <code>edge://extensions</code> →
-          <strong>Developer mode</strong> on → <strong>Load unpacked</strong> → pick the unzipped folder.
+          Zip path (advanced): Edge → <code>edge://extensions</code> · Firefox → <code>about:debugging#/runtime/this-firefox</code> →
+          <strong>Load Temporary Add-on</strong> (or use <strong>Load unpacked</strong> in Firefox Developer Edition). Turn on
+          <strong>Developer mode</strong> where shown, then load the folder that contains <code>manifest.json</code>.
         </p>
       </div>
 
       <div class="card">
-        <h2 style="margin: 0 0 8px; font-size: 1.1rem">Open extensions page</h2>
+        <h2 style="margin: 0 0 8px; font-size: 1.1rem">Open your browser’s extensions page</h2>
         <p class="lead" style="margin-bottom: 12px">
-          Browsers block websites from installing extensions automatically (security). These buttons jump to the right page; you still choose <strong>Load unpacked</strong> after downloading the zip above.
+          Sites cannot silently install extensions (browser security). Use the store buttons above for true one-click installs. These shortcuts only open the extensions UI — useful after downloading the zip.
         </p>
         <div class="btn-row">
           <button type="button" class="primary" id="edgeOpenBtn">Open Edge extensions</button>
-          <button type="button" class="secondary" id="chromeOpenBtn">Open Chrome extensions</button>
+          <button type="button" class="ghost" id="firefoxOpenBtn">Open Firefox add-ons</button>
         </div>
         <p class="hint" id="hint"></p>
       </div>
 
       <div class="card">
-        <h2 style="margin: 0 0 8px; font-size: 1.1rem">Steps (after download)</h2>
+        <h2 style="margin: 0 0 8px; font-size: 1.1rem">Steps (zip / unpacked)</h2>
         <ol class="steps">
           <li>Unzip <code>cart-it-extension.zip</code> somewhere easy to find (Desktop is fine).</li>
-          <li>Open the extensions page using the buttons above.</li>
-          <li>Turn on <strong>Developer mode</strong> (toggle in the corner).</li>
-          <li>Click <strong>Load unpacked</strong> and select the <strong>unzipped folder</strong> (the one that contains <code>manifest.json</code>).</li>
+          <li>Open the extensions page using the buttons above (same browser you’re loading into).</li>
+          <li>Turn on <strong>Developer mode</strong> where applicable.</li>
+          <li><strong>Load unpacked</strong> / <strong>Load Temporary Add-on</strong> and pick the folder that contains <code>manifest.json</code>.</li>
           <li>Log in on <span id="siteOrigin">this site</span> — the extension syncs your session from an open tab.</li>
         </ol>
         <p class="store-note">
-          <strong>Tip:</strong> Paste your Chrome, Edge, and Firefox listing URLs in <code>STORE_URLS</code> below so visitors get one-click installs from each store.
+          <strong>Tip:</strong> Set <code>STORE_URLS.edge</code> and <code>STORE_URLS.firefox</code> so visitors see the two green store buttons — that’s the real one-click install for Edge and Firefox.
         </p>
       </div>
     </div>
 
     <script>
       /**
-       * Optional: after you publish, paste store listing URLs here for true one-click install.
-       * Leave empty strings to hide store buttons.
+       * Paste your public listing URLs after Edge + Mozilla approve the extension (one-click install).
+       * Leave empty to hide the store buttons until listings exist.
        */
       const STORE_URLS = {
-        chrome: "",
+        /** Microsoft Edge Add-ons — listing page URL */
         edge: "",
-        /** Your approved listing: AMO → Manage listing → copy public URL (one-click “Add to Firefox” for users). */
+        /** addons.mozilla.org — your add-on’s public page */
         firefox: "",
       };
 
@@ -203,7 +203,6 @@
       (function wireStoreLinks() {
         const storeRow = document.getElementById("storeRow");
         const links = [
-          { key: "chrome", el: document.getElementById("storeChrome") },
           { key: "edge", el: document.getElementById("storeEdge") },
           { key: "firefox", el: document.getElementById("storeFirefox") },
         ];
@@ -238,7 +237,7 @@
         }
       }
       document.getElementById("edgeOpenBtn").addEventListener("click", () => tryOpen("edge://extensions"));
-      document.getElementById("chromeOpenBtn").addEventListener("click", () => tryOpen("chrome://extensions"));
+      document.getElementById("firefoxOpenBtn").addEventListener("click", () => tryOpen("about:addons"));
     </script>
   </body>
 </html>
