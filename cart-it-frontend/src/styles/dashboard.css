@@ -33,6 +33,7 @@
     disabled:opacity-50 disabled:pointer-events-none;
   }
   .wishlist-img-placeholder { @apply w-28 h-28 bg-[#DB8046] rounded-t-2xl rounded-b-md flex items-center justify-center; }
+  .wishlist-card-cover { @apply w-28 h-28 rounded-t-2xl rounded-b-md object-cover shrink-0 bg-slate-100; }
   .wishlist-card-footer { @apply w-full flex justify-between items-center gap-2 px-1 py-1 mt-1 min-w-0; }
   .wishlist-card-name { @apply font-bold text-black truncate; }
   .wishlist-item-count { @apply font-normal italic text-[#7C8188]; }

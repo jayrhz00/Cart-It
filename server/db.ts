@@ -1,11 +1,23 @@
 /**
- * PostgreSQL connection for the API.
- * DATABASE_URL in server/.env points at your database (local or Neon).
- * A "pool" reuses connections so we do not open a new TCP connection on every query.
+ * PostgreSQL connection for the Cart-It API (student-friendly overview)
  *
- * - Frontend calls an endpoint in index.ts.
- * - Endpoint runs SQL using this pool.
- * - Query result is returned as JSON to frontend.
+ * WHAT THIS FILE IS FOR
+ *   Every route in `index.ts` that needs data eventually runs SQL through `pool`
+ *   (import: `import { pool } from "./db"`). Think of `pool` as the shared door to your database.
+ *
+ * WHY A "POOL" INSTEAD OF ONE CONNECTION?
+ *   Opening a real network connection to Postgres is slow. A pool keeps a few connections
+ *   ready and hands them to your code when a request arrives, then recycles them. That is
+ *   normal in production APIs.
+ *
+ * WHY WE THROW IF DATABASE_URL IS MISSING
+ *   Without a valid connection string the server cannot save users or items. Failing fast
+ *   at startup is clearer than mysterious errors on the first login.
+ *
+ * WHAT THE `pool.connect()` BLOCK BELOW DOES
+ *   When Node loads this file, we borrow one client, log success, then `client.release()`.
+ *   Releasing puts the client back in the pool (it does NOT close the whole database).
+ *   If the URL/password/database name is wrong, you see the error in the terminal immediately.
  */
 import dotenv from "dotenv";
 import { Pool } from "pg";

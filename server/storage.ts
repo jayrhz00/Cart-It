@@ -1,10 +1,16 @@
 // Cart-It storage layer
 // ---------------------------------------------------------------------------
-// STUDENT NOTES:
-// - This file is the "data access layer" between routes (index.ts) and PostgreSQL.
-// - `index.ts` should call functions here instead of writing duplicate SQL everywhere.
-// - If frontend asks for users/groups/items, routes call storage methods, which query DB.
-// - `schema.ts` defines TS shapes; this file performs actual reads/writes.
+// STUDENT NOTES — what this file is and why it exists
+//
+// - "Storage" = the place your API reads/writes users and groups. Routes in `index.ts` import
+//   `storage` so they do not scatter the same SQL in twenty different files.
+// - `MemStorage` is an in-memory fake database (Maps). Useful to understand CRUD patterns
+//   without Postgres; the live server uses `DatabaseStorage` instead.
+// - `DatabaseStorage` runs real SQL through `pool` from `db.ts`. Many cart/item routes still
+//   use `pool.query` directly in `index.ts` for history — that is OK for a class project; you
+//   could gradually move that SQL into this class as you refactor.
+// - TypeScript shapes for rows live in `../shared/schema.ts`; this file turns those types
+//   into INSERT/SELECT statements.
 
 
 
@@ -14,7 +20,7 @@ import
 {
     User, InsertUser,                    // User = full stored user, InsertUser = data used to create a user
     Group, InsertGroup,                  // Group = full group object, InsertGroup = data used to create group
-    GroupMember, InsertGroupMember,      // GroupMember = full membership record, InserGroupMmember = data used to add a member 
+    GroupMember, InsertGroupMember,      // GroupMember = full membership record, InsertGroupMember = payload to add a member
     Cart, InsertCart,
     Item, InsertItem,
     PriceHistory, InsertPriceHistory,    // PriceHistory = full price record, InsertPriceHistory = data used to save a price check
@@ -613,9 +619,10 @@ async updateGroup(): Promise<Group | undefined>
     markNotificationAsRead(): any { throw new Error("Not implemented"); }
 }
 
-    // ---- EXPORTED STORAGE ----
-    // Shared storage instance used by server 
-    export const storage = new DatabaseStorage();
+// ---- EXPORTED STORAGE (singleton) ----
+// One shared `storage` object for the whole Node process. All routes import the same instance
+// so every request sees the same database connection pool underneath.
+export const storage = new DatabaseStorage();
 
 
 

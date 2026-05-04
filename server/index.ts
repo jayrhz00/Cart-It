@@ -1,3 +1,4 @@
+// IMPORTS
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -9,18 +10,16 @@ import path from "path";
 import { pool } from "./db";
 import { storage } from "./storage";
 
-/**
- * Cart-It — Express API + PostgreSQL
- * ---------------------------------------------------------------------------
- * STUDENT CHEAT SHEET (how to explain this file in class):
- * - Express: a web server that listens for HTTP requests (GET, POST, etc.).
- * - Each `app.get` / `app.post` is an "endpoint" or "route" your React app calls.
- * - `authenticateToken`: middleware — runs BEFORE the route handler; checks JWT.
- * - JWT: JSON Web Token — proves "this request is from user X" without sending password again.
- * - `pool` (from db.ts): connection pool to PostgreSQL — runs SQL queries.
- * - `storage`: helper class for user/group rows (some routes use pool directly).
- * - On startup we run `schema.sql` once so all 6 tables exist (see initializeDatabase).
- */
+
+// Cart-It:Express API + PostgreSQL
+// Express: web server framework that listens for HTTP requests, responses, NextFunction
+// Each app.get / app.post is a route React app calls
+// authenticateToken: middleware runs BEFORE the route handler; checks JWT
+// JWT: JSON Web Token — proves "this request is from user X" without sending password again.
+ // pool (from db.ts): connection pool to PostgreSQL — runs SQL queries.
+ // storage: helper class for user/group rows (some routes use pool directly).
+ // On startup we run schema.sql once so all 6 tables exist (see initializeDatabase).
+ 
 dotenv.config();
 
 // Make sure JWT secret exists before server starts
@@ -30,8 +29,7 @@ if (!process.env.JWT_SECRET)
 }
 
 // TYPE DEFINITIONS
-// These help TypeScript understand what data
-// is inside req.body and req.user
+// Help TypeScript understand what data is inside req.body and req.user
 
 // Body for register route
 interface RegisterBody 
@@ -65,17 +63,20 @@ interface CreateGroupBody
   visibility?: string;
 }
 
-interface UpdateGroupBody {
+interface UpdateGroupBody 
+{
   group_name?: string;
   color?: string | null;
   visibility?: "Private" | "Shared";
 }
 
-interface GroupCommentBody {
+interface GroupCommentBody 
+{
   body?: string;
 }
 
-interface CreateCartItemBody {
+interface CreateCartItemBody 
+{
   group_id?: number | null;
   item_name: string;
   product_url: string;
@@ -92,7 +93,8 @@ interface CreateCartItemBody {
   notes?: string | null;
 }
 
-interface UpdateCartItemBody {
+interface UpdateCartItemBody 
+{
   group_id?: number | null;
   item_name?: string;
   product_url?: string;
@@ -116,7 +118,8 @@ interface UpdateCartItemBody {
   out_of_stock?: boolean;
 }
 
-interface InviteGroupMemberBody {
+interface InviteGroupMemberBody 
+{
   email?: string;
   /** Optional: invite by Cart-It user id instead of email (useful for demos / internal tools). */
   user_id?: number;
@@ -137,11 +140,9 @@ type AuthRequest<
 // EXPRESS APP SETUP
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
-/**
- * Background job: re-fetches product pages to update price/stock. Handy in production;
- * for class / local testing you can turn it off so a bad network day does not spam the console.
- *   PRICE_CHECK_ENABLED=false  OR  PRICE_CHECK_INTERVAL_MINUTES=0
- */
+
+//Background job: re-fetches product pages to update price/stock
+// PRICE_CHECK_ENABLED=false  OR  PRICE_CHECK_INTERVAL_MINUTES=0
 const PRICE_CHECK_DISABLED =
   String(process.env.PRICE_CHECK_ENABLED || "")
     .toLowerCase()
@@ -161,15 +162,10 @@ app.use(cors());
 // Allow backend to read JSON from req.body
 app.use(express.json());
 
-/**
- * STUDENT NOTE — why this helper exists
- *
- * Postgres column names are `is_purchased` and `is_in_stock` (see schema.sql).
- * Lab writeups often call the same ideas `purchased` and `out_of_stock`.
- *
- * WHAT we do: every cart item JSON going back to the browser includes BOTH naming styles.
- * WHY: so Postman / extension / frontend teammates can read the payload without guessing internals.
- */
+// Postgres column names are is_purchased and is_in_stock (see schema.sql).
+// Lab writeups often call the same ideas purchased and out_of_stock.
+// WHAT we do: every cart item JSON going back to the browser includes BOTH naming styles.
+// WHY: so Postman / extension / frontend teammates can read the payload without guessing internals.
 function shapeCartItemResponse(row: Record<string, unknown>) {
   return {
     ...row,
@@ -2997,9 +2993,9 @@ app.patch(
 
 // START SERVER
 // FINAL RUNTIME FLOW:
-// 1) Load schema/tables.
-// 2) Start HTTP server.
-// 3) Start background price/stock worker loop.
+// 1) Load schema/tables
+// 2) Start HTTP server
+// 3) Start background price/stock worker loop
 async function startServer() {
   try {
     await initializeDatabase();

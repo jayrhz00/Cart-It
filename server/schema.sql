@@ -2,9 +2,11 @@
 -- Cart-It DB Schema 
 -- Stores raw PostgreSQL table definitions
 --
--- STUDENT DEMO TIP: This file defines all 6 tables. The API runs it once at startup
--- (initializeDatabase in index.ts) so your database always matches this file.
--- In psql use \dt to list tables, \d table_name to show columns.
+-- STUDENT DEMO TIP: Core tables are users, groups, group_members, cart_items, price_history,
+-- notifications. Extra collaboration tables (item_private_notes, item_group_comments,
+-- group_comments) are created here too — the API may ALTER/CREATE more at startup in index.ts
+-- for backwards compatibility. `initializeDatabase` runs this whole file once when the server boots.
+-- In psql: \dt lists tables, \d table_name shows columns.
 
 -- TABLE 1: users
 -- Stores each registered Cart-It user

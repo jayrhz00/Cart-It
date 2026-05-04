@@ -10,6 +10,26 @@ const formatMoney = (n) => {
   return Number.isFinite(v) ? `$${v.toFixed(2)}` : "$0.00";
 };
 
+/** Wishlist grid thumbnail: newest item image in that list, or orange placeholder. */
+function WishlistCardCover({ imageUrl }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+  }, [imageUrl]);
+  const src = typeof imageUrl === "string" ? imageUrl.trim() : "";
+  if (!src || failed) {
+    return <div className="wishlist-img-placeholder" aria-hidden />;
+  }
+  return (
+    <img
+      src={src}
+      alt=""
+      className="wishlist-card-cover"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
@@ -47,6 +67,26 @@ const Dashboard = () => {
       cartItems.filter((i) => Number(i.group_id) === Number(groupId)).length,
     [cartItems]
   );
+
+  /** Newest cart row per wishlist that has an image_url (for dashboard card preview). */
+  const coverImageByGroupId = useMemo(() => {
+    const best = {};
+    for (const i of cartItems) {
+      if (i.group_id == null || i.group_id === "") continue;
+      const url = String(i.image_url || "").trim();
+      if (!url) continue;
+      const gid = Number(i.group_id);
+      const itemId = Number(i.item_id || 0);
+      if (!best[gid] || itemId > best[gid].itemId) {
+        best[gid] = { itemId, url };
+      }
+    }
+    const out = {};
+    for (const [gid, row] of Object.entries(best)) {
+      out[Number(gid)] = row.url;
+    }
+    return out;
+  }, [cartItems]);
 
   const recentItems = useMemo(
     () =>
@@ -240,7 +280,7 @@ const Dashboard = () => {
                       className="wishlist-card-main"
                       onClick={() => navigate(`/wishlist/${id}`)}
                     >
-                      <div className="wishlist-img-placeholder" />
+                      <WishlistCardCover imageUrl={coverImageByGroupId[id] ?? null} />
                       <div className="wishlist-card-footer">
                         <span className="wishlist-card-name">{label}</span>
                         <span className="text-[11px] font-semibold text-orange-700">
