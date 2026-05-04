@@ -11,6 +11,7 @@ import PublicCart from './components/public-cart';
 import SpendingAnalytics from './components/analytics';
 import ItemDetailModal from './components/item-modal';
 import ResetPassword from './components/reset-password';
+import ForgotPassword from './components/forgot-password';
 import PrivacyPolicy from './components/privacy-policy';
 
 function App() {
@@ -28,7 +29,9 @@ function App() {
         <Route path="/analytics" element={<SpendingAnalytics />} />
         <Route path="/item/:id" element={<ItemDetailModal />} /> 
         <Route path="/share-wishlist/:shareToken/:wishlistId" element={<PublicWishlist />} />
-        <Route path="/reset-password/:token" element={<ResetPassword />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        {/* Email links use ?token=...; ResetPassword reads the query string, not a path param */}
+        <Route path="/reset-password" element={<ResetPassword />} />
       </Routes>
     </Router>
   );

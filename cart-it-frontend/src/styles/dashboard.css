@@ -3,25 +3,9 @@
 @tailwind utilities;
 
 @layer components {
-  /* Main Layout Structure */
-  .dashboard-container { @apply flex min-h-screen bg-gray-100; }
-  .dash-main { @apply flex-1 p-12 max-w-7xl mx-auto w-full; }
-  .dash-header { @apply mb-12; }
-  .dash-title { @apply text-4xl font-black text-gray-900 tracking-tight; }
-  .dash-subtitle { @apply text-gray-400 mt-1 font-medium; }
+  /* Main Layout */
+  .dashboard-container { @apply flex min-h-screen bg-[#4A103D] text-white; }
 
-<<<<<<< HEAD
-  /* Grid System for Wishlist Cards */
-  .dash-section { @apply mb-16; }
-  .section-heading { @apply text-xs uppercase tracking-[0.2em] text-gray-400 font-bold mb-8; }
-  .wishlist-grid { @apply grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8; }
-
-  /* Branded Primary Action: Create List Card */
-  .create-list-card {
-    @apply h-[280px] bg-[#36013F] rounded-2xl flex flex-col items-center justify-center 
-    gap-4 transition-all duration-300 shadow-lg;
-    box-shadow: 0 20px 40px -15px rgba(54, 1, 63, 0.4);
-=======
   /* Item Card Style */
   .cart-grid { @apply grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4; }
 
@@ -55,68 +39,15 @@
 
   .empty-state { 
     @apply h-48 col-span-4 flex items-center justify-center text-white/50 italic text-lg py-10 border-2 border-dashed border-white/20 rounded-[40px]; 
->>>>>>> 4c963f342e023986f12ef53383f9a37ed35d6012
   }
-  .create-list-card:hover {
-    @apply -translate-y-2;
-    background-color: #4a0257;
-    box-shadow: 0 30px 50px -10px rgba(54, 1, 63, 0.6);
-  }
-  .plus-icon-circle {
-    @apply w-16 h-16 rounded-full border-2 border-white/20 flex items-center justify-center text-white;
-  }
-  .create-label { @apply text-white font-bold tracking-wide; }
 
-  /* Wishlist Quad-View Card */
-  .dash-wishlist-card {
-    @apply bg-white rounded-2xl border border-gray-200 shadow-md overflow-hidden 
-    cursor-pointer transition-all hover:shadow-2xl hover:-translate-y-1;
-  }
-  .wishlist-quad { @apply h-48 w-full bg-gray-100 relative; }
-  .quad-grid { 
-    @apply grid grid-cols-2 grid-rows-2 h-full gap-0.5; 
-    background-color: #f3f4f6; 
-  }
-  .quad-img { @apply w-full h-full object-cover; }
-  .quad-empty { @apply bg-white; }
-  .quad-placeholder { @apply flex items-center justify-center h-full bg-white; }
-
-  /* Information Section */
-  .wishlist-info { @apply p-5 bg-white border-t border-gray-50; }
-  .list-name { @apply block font-bold text-gray-900 text-lg leading-tight; }
-  .list-count { @apply text-sm text-gray-400 font-medium mt-1; }
-
-  /* Dashboard Insight Cards */
-  .insights-grid { @apply grid grid-cols-1 md:grid-cols-2 gap-8; }
-  .insight-card { 
-    @apply bg-white p-8 rounded-2xl border border-gray-100 shadow-sm cursor-pointer 
-    hover:border-gray-300 transition-all; 
-  }
-  .card-top { @apply flex justify-between items-center mb-8; }
-  .insight-label { @apply font-black text-gray-900 uppercase tracking-wider text-xs; }
-
-  /* Sparkline Graph Logic */
-  .mini-graph { @apply flex items-end gap-3 h-24 w-full mt-4; }
-  .spark-bar { @apply flex-1 bg-gray-300 rounded-lg transition-all duration-500 min-w-[20px]; }
-  .spark-bar.active { @apply bg-[#DB8046] shadow-sm; }
-
-  /* Activity Strip Logic */
-  .recent-strip { @apply flex gap-3; }
-  .strip-img { @apply w-16 h-16 rounded-xl object-cover border border-gray-100; }
-
-  /* Modal & Overlays */
-  .modal-overlay { @apply fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[2000] flex items-center justify-center; }
-  .modal-content { @apply bg-white p-10 rounded-2xl w-full max-w-sm shadow-2xl; }
-  .modal-title { @apply text-xl font-bold text-gray-900 mb-6; }
+  /* Modal Styles */
+  .modal-overlay { @apply fixed inset-0 bg-black/50 flex items-center justify-center z-[1000]; }
+  .modal-content { @apply bg-white p-8 rounded-xl w-[350px] shadow-2xl flex flex-col gap-4 text-black; }
   .modal-content input { 
-    @apply w-full p-4 bg-gray-50 border border-gray-200 rounded-xl mb-6 outline-none 
-    focus:border-[#DB8046] transition-all; 
+    @apply p-3 border border-gray-300 rounded-md outline-none transition-colors text-black 
+    focus:border-[#DB8046] focus:ring-2 focus:ring-[#DB8046]/20; 
   }
-<<<<<<< HEAD
-  .modal-actions { @apply flex gap-3; }
-  .btn-save { @apply flex-1 bg-[#36013F] text-white py-3 rounded-xl font-bold hover:bg-black transition-colors; }
-  .btn-cancel { @apply flex-1 bg-gray-100 text-gray-500 py-3 rounded-xl font-bold hover:bg-gray-200 transition-colors; }
-=======
   .modal-actions { @apply flex justify-end gap-2; }
   .save-btn { @apply bg-[#f97316] text-white py-2 px-4 rounded-md cursor-pointer; }
   .cancel-btn { @apply bg-gray-200 py-2 px-4 rounded-md cursor-pointer; }
@@ -145,5 +76,4 @@
   .dashboard-container {
     flex-direction: column;
   }
->>>>>>> 4c963f342e023986f12ef53383f9a37ed35d6012
 }

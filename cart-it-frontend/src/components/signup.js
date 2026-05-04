@@ -1,55 +1,19 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { signup } from '../services/api'; 
 import '../styles/auth.css';
 import { apiRequest } from './api';
 
-/**
- * Signup Component
- * Handles new user registration. 
- */
-
 const Signup = () => {
-  const navigate = useNavigate(); // Navigation hook for redirecting after signup
+  const navigate = useNavigate(); // Hook for navigation
   const [username, setUsername] = useState(''); // State for username input
   const [email, setEmail] = useState(''); // State for email input
   const [password, setPassword] = useState(''); // State for password input
-<<<<<<< HEAD
-  const [statusMessage, setStatusMessage] = useState(''); // State for displaying status messages 
-  const [isLoading, setIsLoading] = useState(false); // State for loading status during signup process
-
-=======
   const [statusMessage, setStatusMessage] = useState(''); // State for status messages
   const [statusKind, setStatusKind] = useState('error');
   const [isLoading, setIsLoading] = useState(false);
->>>>>>> 4c963f342e023986f12ef53383f9a37ed35d6012
 
+  // Handle form submission for sign up
   const handleSignup = async (e) => {
-<<<<<<< HEAD
-  e.preventDefault();
-  setIsLoading(true); // Start loading
-  setStatusMessage(""); // Clear previous status messages
-  // Basic client-side validation for password strength
-  if (password.length < 8) {
-    setStatusMessage("Password must be at least 8 characters long.");
-    return;
-  }
-  // Check for at least one number in the password
-  if (!/\d/.test(password)) {
-    setStatusMessage("Password must contain at least one number.");
-    return;
-  }
-  try {
-    await signup(username, email, password);
-    setStatusMessage("Sign up successful! Redirecting...");
-    setTimeout(() => navigate('/login'), 2000);
-  } catch (error) {
-    setStatusMessage(error.message);
-  } finally {
-    setIsLoading(false);
-  }
-};
-=======
     e.preventDefault();
     setStatusMessage('');
     setStatusKind('error');
@@ -70,7 +34,6 @@ const Signup = () => {
       setIsLoading(false);
     }
   };
->>>>>>> 4c963f342e023986f12ef53383f9a37ed35d6012
 
   return (
     <div className="auth-container">
@@ -100,6 +63,7 @@ const Signup = () => {
               <div>
                 <label className="auth-label">Username</label>
                 <input 
+                  type="text" 
                   className="input-field"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
