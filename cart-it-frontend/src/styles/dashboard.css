@@ -10,6 +10,7 @@
   .dash-title { @apply text-4xl font-black text-gray-900 tracking-tight; }
   .dash-subtitle { @apply text-gray-400 mt-1 font-medium; }
 
+<<<<<<< HEAD
   /* Grid System for Wishlist Cards */
   .dash-section { @apply mb-16; }
   .section-heading { @apply text-xs uppercase tracking-[0.2em] text-gray-400 font-bold mb-8; }
@@ -20,6 +21,41 @@
     @apply h-[280px] bg-[#36013F] rounded-2xl flex flex-col items-center justify-center 
     gap-4 transition-all duration-300 shadow-lg;
     box-shadow: 0 20px 40px -15px rgba(54, 1, 63, 0.4);
+=======
+  /* Item Card Style */
+  .cart-grid { @apply grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4; }
+
+  /* Main Area */
+  .dash-main { @apply flex-1 p-6 md:p-10 xl:p-12 min-w-0; }
+  .dash-title { @apply text-2xl md:text-3xl xl:text-4xl font-semibold italic text-center mb-8 md:mb-12; }
+
+  /* Wishlist Section */
+  .wishlist-section { @apply space-y-6 mb-12; }
+  .dash-wishlist-title { @apply text-2xl font-bold italic text-white; }
+  .wishlist-grid { @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-4 md:gap-6; }
+  
+  .create-wishlist-btn { @apply h-44 md:h-48 bg-[#DB8046] p-6 rounded-[28px] md:rounded-[40px] flex flex-col items-center justify-center space-y-3 transition-transform hover:scale-105; }
+  .create-wishlist-label { @apply text-xs italic font-semibold; }
+  
+  .wishlist-card { @apply relative bg-white rounded-t-3xl rounded-b-lg p-2 flex flex-col items-center min-w-0; }
+  .wishlist-card-main {
+    @apply w-full flex flex-col items-center min-w-0 cursor-pointer border-0 bg-transparent p-0 text-inherit
+    transition-transform hover:scale-[1.02] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 rounded-lg;
+  }
+  .wishlist-card-delete {
+    @apply absolute top-2 right-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full
+    border border-gray-200 bg-white text-gray-600 shadow-sm
+    hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors
+    disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .wishlist-img-placeholder { @apply w-28 h-28 bg-[#DB8046] rounded-t-2xl rounded-b-md flex items-center justify-center; }
+  .wishlist-card-footer { @apply w-full flex justify-between items-center gap-2 px-1 py-1 mt-1 min-w-0; }
+  .wishlist-card-name { @apply font-bold text-black truncate; }
+  .wishlist-item-count { @apply font-normal italic text-[#7C8188]; }
+
+  .empty-state { 
+    @apply h-48 col-span-4 flex items-center justify-center text-white/50 italic text-lg py-10 border-2 border-dashed border-white/20 rounded-[40px]; 
+>>>>>>> 4c963f342e023986f12ef53383f9a37ed35d6012
   }
   .create-list-card:hover {
     @apply -translate-y-2;
@@ -76,7 +112,38 @@
     @apply w-full p-4 bg-gray-50 border border-gray-200 rounded-xl mb-6 outline-none 
     focus:border-[#DB8046] transition-all; 
   }
+<<<<<<< HEAD
   .modal-actions { @apply flex gap-3; }
   .btn-save { @apply flex-1 bg-[#36013F] text-white py-3 rounded-xl font-bold hover:bg-black transition-colors; }
   .btn-cancel { @apply flex-1 bg-gray-100 text-gray-500 py-3 rounded-xl font-bold hover:bg-gray-200 transition-colors; }
+=======
+  .modal-actions { @apply flex justify-end gap-2; }
+  .save-btn { @apply bg-[#f97316] text-white py-2 px-4 rounded-md cursor-pointer; }
+  .cancel-btn { @apply bg-gray-200 py-2 px-4 rounded-md cursor-pointer; }
+
+  /* Analytics & Cart Section */
+  .info-grid { @apply grid grid-cols-1 2xl:grid-cols-2 gap-6 md:gap-8; }
+  .dashboard-card { @apply bg-[#DB8046] p-5 md:p-8 rounded-[24px] md:rounded-[40px] shadow-lg min-w-0; }
+  .card-header { @apply text-xl font-bold mb-6 italic; }
+  
+  .box-placeholder { @apply h-20 bg-white/20 rounded-xl; }
+  .cart-grid { @apply grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4; }
+  .cart-placeholder { @apply h-16 bg-white/20 rounded-lg; }
+  .cart-item-card { @apply bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-1 min-w-0; }
+
+  .recent-cart-item-image-wrap { @apply relative; }
+  .dashboard-recent-item-delete {
+    @apply absolute top-1 right-1 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full
+    border border-slate-200 bg-white text-slate-600 shadow-sm
+    hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors
+    disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+}
+
+@media (max-width: 1024px) {
+  .dashboard-container {
+    flex-direction: column;
+  }
+>>>>>>> 4c963f342e023986f12ef53383f9a37ed35d6012
 }

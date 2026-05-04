@@ -68,7 +68,13 @@ const LandingPage = () => {
 
           {/* Call to Action: Download extension button */}
           <div className="mt-16">
-            <button className="download-btn">Download Cart-It Extension</button>
+            <button
+              type="button"
+              className="download-btn"
+              onClick={() => window.open("/extension-install.html", "_blank", "noopener,noreferrer")}
+            >
+              Download Cart-It Extension
+            </button>
           </div>
         </div>
       </section>

@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Install Cart-It extension</title>
+    <style>
+      :root {
+        --bg: #4a103d;
+        --card: rgba(255, 255, 255, 0.12);
+        --border: rgba(255, 255, 255, 0.25);
+        --accent: #ea580c;
+        --muted: #fed7aa;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+        margin: 0;
+        padding: 24px 16px 48px;
+        background: var(--bg);
+        color: #fff7ed;
+        line-height: 1.5;
+      }
+      .wrap {
+        max-width: 640px;
+        margin: 0 auto;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 22px 20px;
+        margin-bottom: 16px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 1.45rem;
+      }
+      .lead {
+        margin: 0 0 16px;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+      .pill {
+        display: inline-block;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(234, 88, 12, 0.35);
+        color: #ffedd5;
+        margin-bottom: 12px;
+      }
+      .btn-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 12px 0;
+      }
+      button,
+      a.btn {
+        border: 0;
+        border-radius: 10px;
+        padding: 12px 16px;
+        font-weight: 700;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-size: 0.95rem;
+      }
+      .primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .secondary {
+        background: #e2e8f0;
+        color: #1f2937;
+      }
+      .ghost {
+        background: rgba(255, 255, 255, 0.15);
+        color: #fff7ed;
+        border: 1px solid var(--border);
+      }
+      .hint {
+        margin: 10px 0 0;
+        font-size: 0.88rem;
+        color: var(--muted);
+        min-height: 1.2em;
+      }
+      ol.steps {
+        margin: 12px 0 0;
+        padding-left: 1.25rem;
+        color: #ffedd5;
+        font-size: 0.92rem;
+      }
+      ol.steps li {
+        margin-bottom: 8px;
+      }
+      code {
+        background: rgba(0, 0, 0, 0.25);
+        padding: 2px 6px;
+        border-radius: 6px;
+        font-size: 0.85em;
+      }
+      .store-note {
+        font-size: 0.88rem;
+        color: var(--muted);
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid var(--border);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <div class="pill">Fastest path</div>
+        <h1>Install Cart-It</h1>
+        <p class="lead">
+          Published extensions install in <strong>one click</strong> from the store. Until then, use the zip below — two short steps after download.
+        </p>
+
+        <div class="btn-row" id="storeRow" hidden>
+          <a class="btn primary" id="storeChrome" href="#" target="_blank" rel="noopener noreferrer"
+            >Add to Chrome</a
+          >
+          <a class="btn secondary" id="storeEdge" href="#" target="_blank" rel="noopener noreferrer"
+            >Edge Add-ons</a
+          >
+          <a class="btn ghost" id="storeFirefox" href="#" target="_blank" rel="noopener noreferrer"
+            >Firefox Add-ons</a
+          >
+        </div>
+
+        <div class="btn-row">
+          <a
+            class="btn primary"
+            id="zipDownload"
+            href="/cart-it-extension.zip"
+            download="cart-it-extension.zip"
+            >Download extension (zip)</a
+          >
+        </div>
+        <p class="hint" id="zipHint">
+          Unzip the folder, then in Chrome or Edge: <code>chrome://extensions</code> or <code>edge://extensions</code> →
+          <strong>Developer mode</strong> on → <strong>Load unpacked</strong> → pick the unzipped folder.
+        </p>
+      </div>
+
+      <div class="card">
+        <h2 style="margin: 0 0 8px; font-size: 1.1rem">Open extensions page</h2>
+        <p class="lead" style="margin-bottom: 12px">
+          Browsers block websites from installing extensions automatically (security). These buttons jump to the right page; you still choose <strong>Load unpacked</strong> after downloading the zip above.
+        </p>
+        <div class="btn-row">
+          <button type="button" class="primary" id="edgeOpenBtn">Open Edge extensions</button>
+          <button type="button" class="secondary" id="chromeOpenBtn">Open Chrome extensions</button>
+        </div>
+        <p class="hint" id="hint"></p>
+      </div>
+
+      <div class="card">
+        <h2 style="margin: 0 0 8px; font-size: 1.1rem">Steps (after download)</h2>
+        <ol class="steps">
+          <li>Unzip <code>cart-it-extension.zip</code> somewhere easy to find (Desktop is fine).</li>
+          <li>Open the extensions page using the buttons above.</li>
+          <li>Turn on <strong>Developer mode</strong> (toggle in the corner).</li>
+          <li>Click <strong>Load unpacked</strong> and select the <strong>unzipped folder</strong> (the one that contains <code>manifest.json</code>).</li>
+          <li>Log in on <span id="siteOrigin">this site</span> — the extension syncs your session from an open tab.</li>
+        </ol>
+        <p class="store-note">
+          <strong>Tip:</strong> Paste your Chrome, Edge, and Firefox listing URLs in <code>STORE_URLS</code> below so visitors get one-click installs from each store.
+        </p>
+      </div>
+    </div>
+
+    <script>
+      /**
+       * Optional: after you publish, paste store listing URLs here for true one-click install.
+       * Leave empty strings to hide store buttons.
+       */
+      const STORE_URLS = {
+        chrome: "",
+        edge: "",
+        /** Paste your AMO listing, e.g. https://addons.mozilla.org/en-US/firefox/addon/cart-it/ */
+        firefox: "",
+      };
+
+      const hint = document.getElementById("hint");
+      const siteOrigin = document.getElementById("siteOrigin");
+      if (siteOrigin) {
+        siteOrigin.textContent = window.location.origin || "Cart-It";
+      }
+
+      (function wireStoreLinks() {
+        const storeRow = document.getElementById("storeRow");
+        const links = [
+          { key: "chrome", el: document.getElementById("storeChrome") },
+          { key: "edge", el: document.getElementById("storeEdge") },
+          { key: "firefox", el: document.getElementById("storeFirefox") },
+        ];
+        let visible = 0;
+        for (const { key, el } of links) {
+          if (!el) continue;
+          const raw = STORE_URLS[key];
+          const url = raw && String(raw).trim();
+          if (url) {
+            el.href = url;
+            el.removeAttribute("hidden");
+            visible += 1;
+          } else {
+            el.remove();
+          }
+        }
+        if (visible > 0 && storeRow) storeRow.hidden = false;
+      })();
+
+      function copy(text) {
+        navigator.clipboard.writeText(text).then(
+          () => (hint.textContent = "Copied. Paste in the address bar and press Enter."),
+          () => (hint.textContent = "Copy manually: " + text)
+        );
+      }
+      function tryOpen(url) {
+        try {
+          window.location.href = url;
+          setTimeout(() => copy(url), 300);
+        } catch (_) {
+          copy(url);
+        }
+      }
+      document.getElementById("edgeOpenBtn").addEventListener("click", () => tryOpen("edge://extensions"));
+      document.getElementById("chromeOpenBtn").addEventListener("click", () => tryOpen("chrome://extensions"));
+    </script>
+  </body>
+</html>

@@ -1,6 +1,10 @@
 -- Jessie Hernandez 700775688
 -- Cart-It DB Schema 
 -- Stores raw PostgreSQL table definitions
+--
+-- STUDENT DEMO TIP: This file defines all 6 tables. The API runs it once at startup
+-- (initializeDatabase in index.ts) so your database always matches this file.
+-- In psql use \dt to list tables, \d table_name to show columns.
 
 -- TABLE 1: users
 -- Stores each registered Cart-It user
@@ -23,8 +27,8 @@ CREATE TABLE IF NOT EXISTS groups
     group_id SERIAL PRIMARY KEY,                                -- Unique ID for each group
     owner_id INTEGER NOT NULL,                                  -- User who owns this group
     group_name VARCHAR(100) NOT NULL,                           -- Name of group/category
-    color VARCHAR(20) NOT NULL,                                -- Color label for UI display
-    visibility VARCHAR(20) NOT NULL,                            -- Controls whether the group is private or shared 
+    color VARCHAR(20) DEFAULT '#6B7280' NOT NULL,              -- Color label for UI display
+    visibility VARCHAR(20) DEFAULT 'Private' NOT NULL,         -- Controls whether the group is private or shared 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,   -- Stores when the group was created (auto)
 
     -- Verifies that owner_id matches a real user in the users table 
@@ -83,10 +87,17 @@ CREATE TABLE IF NOT EXISTS cart_items
     user_id INTEGER NOT NULL,                                    -- User who saved this item, every item must belong to a user
     group_id INTEGER,                                            -- Group/category this item belongs to / NULL = item is just in the cart (not categorized)
     item_name VARCHAR(255) NOT NULL,                             -- Name of product (ex: "Gym Shark Leggings")
-    url TEXT NOT NULL,                                           -- Link to product page
+    product_url TEXT NOT NULL,                                   -- Link to product page
     image_url TEXT,                                              -- Image of product
     store VARCHAR(100),                                          -- Store/website name (ex: Gymshark, Walmart)
     current_price NUMERIC(10,2),                                 -- Current price of item (changes over time)
+    is_in_stock BOOLEAN DEFAULT TRUE NOT NULL,                   -- Tracks current stock state from product page checks
+    -- STUDENT NOTE: JSON responses ALSO echo friendly aliases from index.ts:
+    --   `out_of_stock` == NOT is_in_stock
+    --   `purchased`    == is_purchased
+    -- The database keeps the original column names so older queries keep working.
+    notes TEXT,                                                  -- Private internal notes (size, quality, etc.)
+    group_comments TEXT,                                         -- Shared notes visible to all collaborators on this wishlist
     is_purchased BOOLEAN DEFAULT FALSE NOT NULL,                 -- Tracks if user bought the item, Default = false cannot be NULL
     purchase_price NUMERIC(10,2),                                -- Price the user actually paid (if purchased)
     purchase_date TIMESTAMP,                                     -- When item was purchased
@@ -115,6 +126,52 @@ CREATE TABLE IF NOT EXISTS cart_items
         CHECK (purchase_price IS NULL OR purchase_price >= 0)
 );
 
+-- Per-user private notes for a cart item (not visible to other collaborators)
+CREATE TABLE IF NOT EXISTS item_private_notes
+(
+    item_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    body TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT fk_item_private_notes_item
+        FOREIGN KEY (item_id) REFERENCES cart_items(item_id) ON DELETE CASCADE,
+    CONSTRAINT fk_item_private_notes_user
+        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    PRIMARY KEY (item_id, user_id)
+);
+
+-- Shared thread: comments on an item visible to everyone with access to the wishlist
+CREATE TABLE IF NOT EXISTS item_group_comments
+(
+    comment_id SERIAL PRIMARY KEY,
+    item_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    body TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT fk_item_group_comments_item
+        FOREIGN KEY (item_id) REFERENCES cart_items(item_id) ON DELETE CASCADE,
+    CONSTRAINT fk_item_group_comments_user
+        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_item_group_comments_item ON item_group_comments(item_id);
+
+-- Shared thread: comments on the wishlist/group itself (not tied to one item)
+CREATE TABLE IF NOT EXISTS group_comments
+(
+    comment_id SERIAL PRIMARY KEY,
+    group_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    body TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT fk_group_comments_group
+        FOREIGN KEY (group_id) REFERENCES groups(group_id) ON DELETE CASCADE,
+    CONSTRAINT fk_group_comments_user
+        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_group_comments_group ON group_comments(group_id);
+
 -- TABLE 5: price_history 
 -- Stores past price records for each saved item 
 -- Tracks price changes over time 
@@ -137,28 +194,31 @@ CREATE TABLE IF NOT EXISTS price_history
 );
 
 -- TABLE 6: notifications
--- Stores alerts sent to users (ex: price drops)
--- Each notification is tied to a user and an item 
+-- Alerts for the signed-in user (price drops, stock, invites). item_id is optional when the alert is list-level only.
 
 CREATE TABLE IF NOT EXISTS notifications
 (
-    notification_id SERIAL PRIMARY KEY,                         -- Unique ID for each notification (auto)
-    user_id INTEGER NOT NULL,                                   -- User who will receive this notification
-    item_id INTEGER NOT NULL,                                   -- Item related to this notification
-    message TEXT NOT NULL,                                      -- Message shown to user (ex: "Price dropped to $5.99")
-    is_read BOOLEAN DEFAULT FALSE NOT NULL,                     -- Tracks if user has seen notification, FALSE= unread, TRUE= viewed
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,    -- Automatically stores when notification was created 
+    notification_id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    item_id INTEGER,
+    group_id INTEGER,
+    message TEXT NOT NULL,
+    is_read BOOLEAN DEFAULT FALSE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
 
--- FK links notification to user
     CONSTRAINT fk_notifications_user
         FOREIGN KEY (user_id)
         REFERENCES users(user_id)
         ON DELETE CASCADE,
 
--- FK links notification to item
     CONSTRAINT fk_notifications_item
         FOREIGN KEY (item_id)
         REFERENCES cart_items(item_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_notifications_group
+        FOREIGN KEY (group_id)
+        REFERENCES groups(group_id)
         ON DELETE CASCADE
 );
 
@@ -167,4 +227,5 @@ INSERT INTO users (username,email, password_hash)
 VALUES 
 ('jessieh', 'jessie@example.com', '$2b$10$hashed1'),
 ('alexm', 'alex@gmail.com', '$2b$10$hashed2'),
-('sarahk', 'sarah@yahoo.com', '$2b$10$hashed3');
+('sarahk', 'sarah@yahoo.com', '$2b$10$hashed3')
+ON CONFLICT (email) DO NOTHING;

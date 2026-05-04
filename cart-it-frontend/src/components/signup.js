@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { signup } from '../services/api'; 
 import '../styles/auth.css';
+import { apiRequest } from './api';
 
 /**
  * Signup Component
@@ -13,11 +14,18 @@ const Signup = () => {
   const [username, setUsername] = useState(''); // State for username input
   const [email, setEmail] = useState(''); // State for email input
   const [password, setPassword] = useState(''); // State for password input
+<<<<<<< HEAD
   const [statusMessage, setStatusMessage] = useState(''); // State for displaying status messages 
   const [isLoading, setIsLoading] = useState(false); // State for loading status during signup process
 
+=======
+  const [statusMessage, setStatusMessage] = useState(''); // State for status messages
+  const [statusKind, setStatusKind] = useState('error');
+  const [isLoading, setIsLoading] = useState(false);
+>>>>>>> 4c963f342e023986f12ef53383f9a37ed35d6012
 
   const handleSignup = async (e) => {
+<<<<<<< HEAD
   e.preventDefault();
   setIsLoading(true); // Start loading
   setStatusMessage(""); // Clear previous status messages
@@ -41,6 +49,28 @@ const Signup = () => {
     setIsLoading(false);
   }
 };
+=======
+    e.preventDefault();
+    setStatusMessage('');
+    setStatusKind('error');
+    setIsLoading(true);
+    try {
+      await apiRequest('/api/register', {
+        method: 'POST',
+        body: JSON.stringify({ username, email, password }),
+      });
+      setStatusMessage("Sign up successful! Redirecting to login...");
+      setStatusKind('success');
+      setTimeout(() => navigate('/login'), 2000);
+    } catch (error) {
+      console.error("Connection error:", error);
+      setStatusMessage(error.message || "Server is down, please try again later.");
+      setStatusKind('error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+>>>>>>> 4c963f342e023986f12ef53383f9a37ed35d6012
 
   return (
     <div className="auth-container">
@@ -60,7 +90,7 @@ const Signup = () => {
           <div className="auth-card">
             <h2 className="auth-title">Create your account</h2>
               {/* Display status messages */}
-            {statusMessage && <div className="status-status">{statusMessage}</div>}
+            {statusMessage && <div className={statusKind === 'success' ? 'status-success' : 'status-message'}>{statusMessage}</div>}
             <p className="auth-subtitle">
               Already have an account? <Link to="/login" className="link-styled">Log in here.</Link>
             </p>
@@ -73,6 +103,7 @@ const Signup = () => {
                   className="input-field"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
+                  disabled={isLoading}
                   required 
                 />
               </div>
@@ -84,6 +115,7 @@ const Signup = () => {
                   className="input-field"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  disabled={isLoading}
                   required 
                 />
               </div>
@@ -95,6 +127,7 @@ const Signup = () => {
                   className="input-field"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  disabled={isLoading}
                   required 
                 />
               </div>

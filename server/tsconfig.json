@@ -4,6 +4,8 @@
     "module": "commonjs",
     "esModuleInterop": true,
     "strict": false,
-    "skipLibCheck": true
-  }
+    "skipLibCheck": true,
+    "rootDir": "."
+  },
+  "include": ["*.ts"]
 }

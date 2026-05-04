@@ -1,0 +1,14 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Set secrets in the Render dashboard: DATABASE_URL, JWT_SECRET, RESEND_* (optional).
+services:
+  - type: web
+    name: cart-it-api
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 22.12.0
+      - key: FRONTEND_URL
+        value: https://cart-it.pages.dev
