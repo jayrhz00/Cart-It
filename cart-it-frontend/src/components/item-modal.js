@@ -36,13 +36,10 @@ const ItemDetailModal = ({ item, onClose, onDelete, onMarkPurchased, onAddNote, 
 
   if (!item) return null;
 
-  const displayPrice = Number(
-    item.current_price ?? item.price ?? 0
-  ).toFixed(2);
+  const displayPrice = Number(item.current_price ?? item.price ?? 0).toFixed(2);
   const productName = item.item_name ?? item.product_name ?? "Item";
   const storeLabel = item.store ?? item.store_name ?? "—";
 
-  // Handles the submission of a new note/comment
   const handleNoteSubmit = async () => {
     if (!newNote.trim()) return;
     try {

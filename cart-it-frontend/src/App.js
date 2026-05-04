@@ -27,10 +27,9 @@ function App() {
         <Route path="/cart" element={<Cart />} />
         <Route path="/share/:token" element={<PublicCart />} />
         <Route path="/analytics" element={<SpendingAnalytics />} />
-        <Route path="/item/:id" element={<ItemDetailModal />} /> 
+        <Route path="/item/:id" element={<ItemDetailModal />} />
         <Route path="/share-wishlist/:shareToken/:wishlistId" element={<PublicWishlist />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-        {/* Email links use ?token=...; ResetPassword reads the query string, not a path param */}
         <Route path="/reset-password" element={<ResetPassword />} />
       </Routes>
     </Router>

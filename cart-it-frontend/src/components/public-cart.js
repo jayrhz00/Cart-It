@@ -20,7 +20,7 @@ const PublicCart = () => {
   useEffect(() => {
     publicApiGet(`/api/public/cart/${encodeURIComponent(token)}`)
       .then((data) => {
-        setItems(Array.isArray(data) ? data : []); // Update the items state with the fetched cart data
+        setItems(Array.isArray(data) ? data : []);
         setIsLoading(false); // Set loading to false after data is fetched
       })
       .catch(err => {

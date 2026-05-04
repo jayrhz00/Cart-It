@@ -28,7 +28,7 @@ const LandingPage = () => {
       {/* How it works: 3-step process cards */}
       <section className="section-padding">
         <div className="steps-wrapper">
-          <h2 className="landing-section-title">How It Works</h2>
+          <h2 className="section-title">How It Works</h2>
           <p className="section-subtitle">Easily save, track, and manage your shopping in just a few steps.</p>
           
           <div className="steps-grid">
@@ -76,11 +76,6 @@ const LandingPage = () => {
               Download Cart-It Extension
             </button>
           </div>
-          <p className="mt-10 text-center text-sm text-slate-500">
-            <Link to="/privacy" className="font-semibold text-orange-700 underline decoration-orange-200 underline-offset-2 hover:text-orange-900">
-              Privacy Policy
-            </Link>
-          </p>
         </div>
       </section>
     </div>
