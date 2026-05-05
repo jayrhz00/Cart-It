@@ -1,7 +1,9 @@
 import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { LuChartColumn, LuDownload, LuLayoutDashboard, LuLogOut, LuShoppingCart } from "react-icons/lu";
+import NotificationBell from "./notification-bell";
 import "../styles/dashboard.css";
+import "../styles/sidebar.css";
 
 const navClass = ({ isActive }) =>
   `dash-nav-link${isActive ? " dash-nav-link-active" : ""}`;
@@ -21,9 +23,12 @@ export default function DashShell({ children }) {
   return (
     <div className="dashboard-container">
       <aside className="dash-sidebar">
-        <button type="button" className="sidebar-logo-btn" onClick={() => navigate("/dashboard")}>
-          <img src="/logo.png" alt="Cart-It home" className="sidebar-logo" />
-        </button>
+        <div className="dash-shell-logo-row flex items-start justify-between gap-2 mb-6">
+          <button type="button" className="sidebar-logo-btn flex-1 min-w-0" onClick={() => navigate("/dashboard")}>
+            <img src="/logo.png" alt="Cart-It home" className="sidebar-logo" />
+          </button>
+          <NotificationBell />
+        </div>
 
         <nav className="dash-nav" aria-label="Main">
           <NavLink to="/dashboard" className={navClass} end>

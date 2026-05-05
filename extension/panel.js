@@ -119,6 +119,26 @@ function getPageData() {
     return out;
   };
 
+  /** Only $12.34 style amounts — avoids "$35" shipping blurbs when min is used. */
+  const pricesFromDollarCentsMatches = (text) => {
+    if (!text) return [];
+    const matches = [...String(text).matchAll(/\$\s*([0-9][0-9,]*\.\d{2})\b/g)];
+    const out = [];
+    for (const m of matches) {
+      const p = parsePriceText(m[1]);
+      if (p != null && p >= 0.01 && p < 1_000_000) out.push(p);
+    }
+    return out;
+  };
+
+  const pickNearCartPriceFromText = (text) => {
+    const cents = pricesFromDollarCentsMatches(text);
+    if (cents.length) return Math.min(...cents);
+    const loose = pricesFromDollarMatches(text);
+    if (!loose.length) return null;
+    return Math.min(...loose);
+  };
+
   const priceNearPrimaryAddToCart = () => {
     const candidates = Array.from(
       document.querySelectorAll(
@@ -144,19 +164,19 @@ function getPageData() {
     let node = btn;
     for (let depth = 0; depth < 14 && node; depth++, node = node.parentElement) {
       const text = (node.innerText || "").slice(0, 2500);
-      const prices = pricesFromDollarMatches(text);
-      if (!prices.length) continue;
+      const picked = pickNearCartPriceFromText(text);
+      if (picked == null) continue;
       const st = window.getComputedStyle(node);
       const fixedish = st.position === "fixed" || st.position === "sticky";
       const cls = `${node.className || ""} ${node.id || ""}`;
       if (fixedish || /sticky|bottom|bar|drawer|atc/i.test(cls)) {
-        return prices[prices.length - 1];
+        return picked;
       }
     }
     node = btn;
     for (let depth = 0; depth < 10 && node; depth++, node = node.parentElement) {
-      const prices = pricesFromDollarMatches((node.innerText || "").slice(0, 2500));
-      if (prices.length) return prices[prices.length - 1];
+      const picked = pickNearCartPriceFromText((node.innerText || "").slice(0, 2500));
+      if (picked != null) return picked;
     }
     return null;
   };
@@ -197,72 +217,159 @@ function getPageData() {
     return null;
   };
 
-  if (!isAmazon) {
-  const metaPriceSelectors = [
-    'meta[property="product:price:amount"]',
-    'meta[property="og:price:amount"]',
-    'meta[name="twitter:data1"]',
-    'meta[itemprop="price"]',
-    'meta[name="price"]',
-  ];
-  for (const selector of metaPriceSelectors) {
-    const parsed = parsePriceText(document.querySelector(selector)?.getAttribute("content"));
-    if (parsed != null) {
-      price = parsed;
-      break;
-    }
-  }
+  /** Prefer explicit US-style retail prices ($12.34) so we skip bare "1500" rewards/points text. */
+  const parseFirstDollarCents = (raw) => {
+    if (!raw) return null;
+    const s = String(raw);
+    const m = s.match(/\$\s*([0-9][0-9,]*\.\d{2})\b/);
+    if (!m?.[1]) return null;
+    return parsePriceText(m[1]);
+  };
 
-  if (price == null) {
-    const candidates = Array.from(
-      document.querySelectorAll(
-        [
-          '[itemprop="price"]',
-          '[data-testid*="price"]',
-          '[class*="price"]',
-          '[id*="price"]',
-          'meta[property="product:price:amount"]',
-          'meta[itemprop="price"]',
-        ].join(",")
-      )
-    );
-    for (const el of candidates) {
-      const content = el.getAttribute?.("content");
-      const text = content || el.textContent || "";
-      const parsed = parsePriceText(text);
+  const typesIncludeProduct = (t) =>
+    t === "Product" || (Array.isArray(t) && t.includes("Product"));
+
+  const priceFromOffers = (offers) => {
+    if (!offers) return null;
+    const list = Array.isArray(offers) ? offers : [offers];
+    for (const o of list) {
+      if (!o || typeof o !== "object") continue;
+      const p = parsePriceText(o.price ?? o.lowPrice ?? o.highPrice);
+      if (p != null && p > 0 && p < 500000) return p;
+    }
+    return null;
+  };
+
+  /** JSON-LD Product/offers — run before broad DOM so Target PDP does not grab Circle "1500" first. */
+  const extractJsonLdProductPrice = () => {
+    const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+    for (const node of scripts) {
+      try {
+        const data = JSON.parse(node.textContent);
+        const roots = Array.isArray(data) ? data : [data];
+        for (const root of roots) {
+          if (!root || typeof root !== "object") continue;
+          if (typesIncludeProduct(root["@type"])) {
+            const p = priceFromOffers(root.offers) ?? parsePriceText(root.price);
+            if (p != null && p > 0 && p < 500000) return p;
+          }
+          if (Array.isArray(root["@graph"])) {
+            for (const g of root["@graph"]) {
+              if (g && typesIncludeProduct(g["@type"])) {
+                const p = priceFromOffers(g.offers) ?? parsePriceText(g.price);
+                if (p != null && p > 0 && p < 500000) return p;
+              }
+            }
+          }
+        }
+        const loose = parseJsonPrice(data);
+        if (loose != null && loose > 0 && loose < 500000) return loose;
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    return null;
+  };
+
+  const isTarget = /(^|\.)target\.com$/i.test(location.hostname);
+
+  if (!isAmazon) {
+    const metaPriceSelectors = [
+      'meta[property="product:price:amount"]',
+      'meta[property="og:price:amount"]',
+      'meta[name="twitter:data1"]',
+      'meta[itemprop="price"]',
+      'meta[name="price"]',
+    ];
+    for (const selector of metaPriceSelectors) {
+      const parsed = parsePriceText(document.querySelector(selector)?.getAttribute("content"));
       if (parsed != null) {
         price = parsed;
         break;
       }
     }
-  }
 
-  if (price == null) {
-    const jsonLd = document.querySelectorAll('script[type="application/ld+json"]');
-    for (const node of jsonLd) {
-      if (price != null) break;
-      try {
-        const data = JSON.parse(node.textContent);
-        const parsed = parseJsonPrice(data);
-        if (parsed != null) price = parsed;
-      } catch (_) {
-        /* ignore */
+    if (price == null) {
+      price = extractJsonLdProductPrice();
+    }
+
+    if (price == null) {
+      const nextDataRaw = textFromScript("#__NEXT_DATA__");
+      if (nextDataRaw) {
+        try {
+          const parsed = parseJsonPrice(JSON.parse(nextDataRaw));
+          if (parsed != null) price = parsed;
+        } catch (_) {
+          /* ignore */
+        }
       }
     }
-  }
 
-  if (price == null) {
-    // Next.js commerce sites often store canonical product data here.
-    const nextDataRaw = textFromScript("#__NEXT_DATA__");
-    if (nextDataRaw) {
-      try {
-        const parsed = parseJsonPrice(JSON.parse(nextDataRaw));
-        if (parsed != null) price = parsed;
-      } catch (_) {
-        /* ignore */
+    if (price == null && isTarget) {
+      const targetSels = [
+        '[data-test="product-price"]',
+        '[data-test="@web/ProductDetailPrice"]',
+        '[data-test="product-price"] *',
+        "h1 + div [class*='price']",
+      ];
+      for (const sel of targetSels) {
+        const el = document.querySelector(sel);
+        if (!el) continue;
+        const t = el.textContent || el.getAttribute?.("content") || "";
+        const strict = parseFirstDollarCents(t);
+        const loose = parsePriceText(t);
+        const p = strict ?? loose;
+        if (p != null && p > 0 && p < 500000) {
+          price = p;
+          break;
+        }
       }
     }
-  }
+
+    if (price == null) {
+      const tight = Array.from(
+        document.querySelectorAll(
+          ['[itemprop="price"]', '[data-testid*="price"]', '[id*="product-price"]', '[id*="ProductPrice"]'].join(",")
+        )
+      );
+      const tightAmounts = [];
+      for (const el of tight) {
+        const content = el.getAttribute?.("content");
+        const text = content || el.textContent || "";
+        const strict = parseFirstDollarCents(text);
+        const loose = parsePriceText(text);
+        const p = strict ?? loose;
+        if (p != null && p > 0 && p < 500000) tightAmounts.push(p);
+      }
+      if (tightAmounts.length) {
+        tightAmounts.sort((a, b) => a - b);
+        price = tightAmounts[0];
+      }
+    }
+
+    if (price == null) {
+      const looseEls = Array.from(
+        document.querySelectorAll(['[class*="price"]', '[id*="price"]'].join(","))
+      );
+      const amounts = [];
+      for (const el of looseEls) {
+        const text = el.getAttribute?.("content") || el.textContent || "";
+        const strict = parseFirstDollarCents(text);
+        if (strict != null) {
+          amounts.push(strict);
+          continue;
+        }
+        const loose = parsePriceText(text);
+        if (loose != null && loose > 0 && loose < 500000) amounts.push(loose);
+      }
+      if (amounts.length) {
+        amounts.sort((a, b) => a - b);
+        const lo = amounts[0];
+        const hi = amounts[amounts.length - 1];
+        if (amounts.length > 1 && hi > lo * 25 && lo < 5000 && hi >= 200) price = lo;
+        else price = amounts[Math.floor(amounts.length / 2)];
+      }
+    }
   }
   // IMPORTANT: Avoid scanning Amazon body text for "$..." because it contains shipping thresholds
   // like "FREE shipping over $35" which are not product prices.
@@ -287,7 +394,13 @@ function getPageData() {
   const nearCartPrice = isAmazon ? null : priceNearPrimaryAddToCart();
   if (nearCartPrice != null) {
     if (price == null) price = nearCartPrice;
-    else if (Math.abs(nearCartPrice - price) >= 0.5) price = nearCartPrice;
+    else if (Math.abs(nearCartPrice - price) >= 0.5) {
+      const hi = Math.max(price, nearCartPrice);
+      const lo = Math.min(price, nearCartPrice);
+      // Do not replace canonical / JSON-LD price with a huge ATC-adjacent outlier (e.g. Circle "1500").
+      if (hi >= lo * 15 && lo > 0 && lo < 5000) price = lo;
+      else price = nearCartPrice;
+    }
   }
 
   const detectInStock = () => {
@@ -496,6 +609,41 @@ async function resolveDashboardUrl() {
   }
   const origin = await getWebAppOrigin();
   return `${origin}/dashboard`;
+}
+
+async function resolveWebAppBaseUrl() {
+  const { jwt_origin } = await chrome.storage.local.get(["jwt_origin"]);
+  if (typeof jwt_origin === "string" && jwt_origin.trim()) {
+    return jwt_origin.replace(/\/$/, "");
+  }
+  return (await getWebAppOrigin()).replace(/\/$/, "");
+}
+
+/** Deep link to the saved item in the web app (`/item/:id`). */
+async function resolveItemPageUrl(itemId) {
+  const base = await resolveWebAppBaseUrl();
+  return `${base}/item/${encodeURIComponent(String(itemId))}`;
+}
+
+/** Close the Chrome side panel after save / “See item” (Chrome 141+); Firefox popup uses window.close. */
+async function closeSidePanel() {
+  try {
+    if (typeof chrome !== "undefined" && chrome.sidePanel?.close) {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const wid = tab?.windowId;
+      if (wid != null) {
+        await chrome.sidePanel.close({ windowId: wid });
+        return;
+      }
+    }
+  } catch {
+    /* Chrome < 141 or panel context without a closable global panel */
+  }
+  try {
+    window.close();
+  } catch {
+    /* ignore */
+  }
 }
 
 async function apiBase() {
@@ -765,8 +913,9 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
       return;
     }
     setStatus(`Saved — item #${data.item_id}`, true);
-    const dashboardUrl = await resolveDashboardUrl();
-    setWishlistLink(dashboardUrl);
+    const itemUrl = await resolveItemPageUrl(data.item_id);
+    setWishlistLink(itemUrl);
+    await closeSidePanel();
   } catch (e) {
     setStatus(e.message || "Network error — is the API running?", false);
     setWishlistLink("");
@@ -839,6 +988,20 @@ document.getElementById("createAccountBtn").addEventListener("click", async () =
 
 document.getElementById("listScope").addEventListener("change", () => {
   renderCategoryOptions();
+});
+
+document.getElementById("viewWishlistLink")?.addEventListener("click", async (e) => {
+  const el = e.currentTarget;
+  if (el.hidden) return;
+  const href = el.getAttribute("href");
+  if (!href || href === "#") return;
+  e.preventDefault();
+  try {
+    await chrome.tabs.create({ url: href, active: true });
+  } catch {
+    window.open(href, "_blank", "noopener,noreferrer");
+  }
+  await closeSidePanel();
 });
 
 async function init() {

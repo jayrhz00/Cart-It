@@ -9,7 +9,7 @@ import PublicWishlist from './components/public-wishlist';
 import Cart from './components/cart';
 import PublicCart from './components/public-cart';
 import SpendingAnalytics from './components/analytics';
-import ItemDetailModal from './components/item-modal';
+import ItemDetailPage from './components/item-detail-page';
 import ResetPassword from './components/reset-password';
 import ForgotPassword from './components/forgot-password';
 import PrivacyPolicy from './components/privacy-policy';
@@ -32,7 +32,7 @@ function App() {
         <Route path="/cart" element={<Cart />} />
         <Route path="/share/:token" element={<PublicCart />} />
         <Route path="/analytics" element={<SpendingAnalytics />} />
-        <Route path="/item/:id" element={<ItemDetailModal />} />
+        <Route path="/item/:id" element={<ItemDetailPage />} />
         <Route path="/share-wishlist/:shareToken/:wishlistId" element={<PublicWishlist />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />

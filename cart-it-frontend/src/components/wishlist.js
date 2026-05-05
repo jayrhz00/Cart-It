@@ -321,7 +321,7 @@ const Wishlist = () => {
                 <div className="flex flex-wrap items-center gap-2">
                   <input
                     type="email"
-                    className="wishlist-invite-email rounded border border-white/30 bg-white/10 px-2 py-1 text-sm text-white placeholder:text-amber-100/50 min-w-[12rem]"
+                    className="wishlist-invite-email rounded border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 placeholder:text-slate-500 min-w-[12rem]"
                     placeholder="Email to invite"
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
@@ -387,12 +387,12 @@ const Wishlist = () => {
           {isSharedList ? (
             <WishlistListChat groupId={groupId} enabled={isSharedList} />
           ) : null}
-          {inviteMsg ? <p className="wishlist-invite-msg text-sm text-amber-100/90">{inviteMsg}</p> : null}
+          {inviteMsg ? <p className="wishlist-invite-msg text-sm">{inviteMsg}</p> : null}
         </header>
 
         <section className="item-grid">
           {filteredItems.length === 0 ? (
-            <p className="col-span-full text-gray-500">
+            <p className="col-span-full wishlist-empty-grid-msg">
               No items in this view. Use the Cart-It extension on any store’s product page to add items.
             </p>
           ) : (

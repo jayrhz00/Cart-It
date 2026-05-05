@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LuLayoutDashboard, LuShoppingCart, LuChartArea, LuLogOut, LuDownload } from "react-icons/lu";
+import NotificationBell from "./notification-bell";
 import '../styles/sidebar.css';
 
 const Sidebar = ({ wishlists = [], showExtension = false }) => {
@@ -9,13 +10,16 @@ const Sidebar = ({ wishlists = [], showExtension = false }) => {
   return (
     <aside className="dash-sidebar">
       <div className="sidebar-top">
-        <img
-          src="/logo.png"
-          alt="Cart-It Logo"
-          className="sidebar-logo"
-          onClick={() => navigate('/dashboard')}
-          role="presentation"
-        />
+        <div className="flex items-start justify-between gap-3 mb-8">
+          <img
+            src="/logo.png"
+            alt="Cart-It Logo"
+            className="h-24 w-auto max-w-[calc(100%-3.5rem)] object-contain cursor-pointer mb-0"
+            onClick={() => navigate('/dashboard')}
+            role="presentation"
+          />
+          <NotificationBell />
+        </div>
 
         <div className="space-y-4 mb-6">
           <div className="sidebar-nav-item" onClick={() => navigate('/dashboard')}><LuLayoutDashboard /> Dashboard</div>

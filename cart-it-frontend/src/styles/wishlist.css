@@ -58,7 +58,11 @@
 
   /* ─── Wishlist detail (purple shell like dashboard; cart keeps light theme) ─── */
   .wishlist-page {
-    @apply bg-[#4A103D] text-[#fff7ed];
+    @apply bg-[#4A103D] text-white;
+  }
+  /* Beat .page-wrapper bg-white — keep shell visibly purple */
+  .wishlist-page.page-wrapper {
+    @apply bg-[#4A103D];
   }
   .wishlist-page .sidebar-container-wrapper {
     @apply border-r border-white/15;
@@ -67,13 +71,16 @@
     @apply bg-transparent;
   }
   .wishlist-page .back-link {
-    @apply text-amber-100/90 hover:text-white mb-6;
+    @apply text-white font-medium hover:text-orange-200 mb-6;
   }
   .wishlist-page .wishlist-title {
-    @apply text-white drop-shadow-sm;
+    @apply text-white font-bold drop-shadow-sm;
   }
   .wishlist-page .stats {
-    @apply text-amber-100/85 mt-2;
+    @apply text-white/95 mt-2 font-normal;
+  }
+  .wishlist-page .stats strong {
+    @apply text-white font-semibold;
   }
   .wishlist-page .tool-btn {
     @apply bg-white/10 border-white/25 text-white hover:bg-white/15 shadow-none backdrop-blur-sm;
@@ -89,33 +96,33 @@
   }
 
   .wishlist-members-strip {
-    @apply mb-6 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 backdrop-blur-md;
+    @apply mb-6 rounded-2xl border border-white/30 bg-white px-4 py-3 shadow-md;
   }
   .wishlist-members-title {
-    @apply text-sm font-semibold tracking-wide text-white mb-2;
+    @apply text-sm font-semibold tracking-wide text-slate-900 mb-2;
   }
   .wishlist-members-pills {
     @apply flex flex-wrap gap-2 items-center;
   }
   .wishlist-member-pill {
-    @apply rounded-full bg-black/25 px-3 py-1 text-xs font-medium text-amber-50 border border-white/10;
+    @apply rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-800 border border-slate-200;
   }
   .wishlist-member-pill--highlight {
-    @apply bg-[#2563eb]/40 border-[#93c5fd]/40 text-white font-semibold;
+    @apply bg-blue-100 border-blue-200 text-blue-950 font-semibold;
   }
   .wishlist-members-empty {
-    @apply text-xs text-amber-100/70;
+    @apply text-xs text-slate-600;
   }
 
-  /* List-wide group chat (shared wishlists) */
+  /* List-wide group chat — light card so body copy is always readable */
   .wishlist-list-chat-panel {
-    @apply mt-6 mb-10 rounded-2xl border border-white/20 bg-black/20 p-4 md:p-5 backdrop-blur-sm;
+    @apply mt-6 mb-10 rounded-2xl border border-slate-200 bg-white p-4 md:p-5 shadow-lg text-left text-slate-900;
   }
   .wishlist-list-chat-heading {
-    @apply m-0 text-lg font-bold text-white tracking-tight;
+    @apply m-0 text-lg font-bold text-slate-900 tracking-tight;
   }
   .wishlist-list-chat-lead {
-    @apply mt-1 mb-3 text-sm text-amber-100/85;
+    @apply mt-1 mb-3 text-sm text-slate-700 leading-snug;
   }
   .wishlist-list-chat-thread {
     @apply max-h-52 md:max-h-64;
@@ -177,6 +184,14 @@
   .wishlist-group-chat-send {
     @apply mt-2 w-full rounded-lg bg-[#7c3aed] py-1.5 text-xs font-semibold text-white
     hover:bg-[#6d28d9] disabled:opacity-50 disabled:pointer-events-none transition-colors;
+  }
+
+  .wishlist-invite-msg {
+    @apply text-white font-medium;
+  }
+
+  .wishlist-empty-grid-msg {
+    @apply text-white text-base font-medium;
   }
 }
 

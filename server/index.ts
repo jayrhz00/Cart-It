@@ -1517,6 +1517,18 @@ app.get("/api/me", authenticateToken, async (req: AuthRequest, res: Response) =>
   }
 });
 
+/**
+ * Safe feature flags for the signed-in client (no secrets).
+ * Used by the web app to explain optional email alerts vs in-app notifications only.
+ */
+app.get("/api/me/features", authenticateToken, async (_req: AuthRequest, res: Response) => {
+  const resendKey = String(process.env.RESEND_API_KEY || "").trim();
+  const resendFrom = String(process.env.RESEND_FROM_EMAIL || "").trim();
+  return res.status(200).json({
+    resend_email_configured: Boolean(resendKey && resendFrom),
+  });
+});
+
 /** Signed URL token for read-only /share/:token (cart). No DB migration — JWT embeds owner user id. */
 app.get("/api/me/public-cart-token", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
